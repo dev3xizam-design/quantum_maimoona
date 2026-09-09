@@ -1,0 +1,277 @@
+"use client";
+
+import { useRef, useState } from "react";
+import Papa from "papaparse";
+import JSZip from "jszip";
+import {
+  accumulateStats,
+  buildHeaderMap,
+  emptyStats,
+  missingRequired,
+  normalizeRow,
+  roundStats,
+  type IngestStats,
+  type NormalizedRow,
+} from "@/lib/ingest/avalara";
+
+const BATCH = 400;
+
+type Progress = { phase: string; rows: number; inserted: number; duplicates: number };
+
+/**
+ * The Avalara export is parsed IN THE BROWSER and streamed to the API in small
+ * batches. That keeps a 200k-row, 198-column file well clear of the serverless
+ * request-body limit, and the validation report can be shown as it goes.
+ */
+export function AvalaraUploader() {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState<Progress | null>(null);
+  const [stats, setStats] = useState<IngestStats | null>(null);
+  const [errors, setErrors] = useState<string[]>([]);
+
+  async function post(path: string, body: unknown) {
+    const res = await fetch(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? `${path} failed`);
+    return res.json();
+  }
+
+  async function parseCsv(
+    file: File | Blob,
+    name: string,
+    uploadId: number,
+    stats: IngestStats,
+    seen: Set<string>,
+    counters: Progress,
+  ) {
+    return new Promise<void>((resolve, reject) => {
+      let map: Record<string, string> | null = null;
+      let buffer: NormalizedRow[] = [];
+      const pending: Promise<unknown>[] = [];
+
+      Papa.parse(file as File, {
+        header: true,
+        skipEmptyLines: true,
+        chunkSize: 1024 * 512,
+        chunk: (results, parser) => {
+          if (!map) {
+            map = buildHeaderMap(results.meta.fields ?? []);
+            const missing = missingRequired(map);
+            if (missing.length) {
+              parser.abort();
+              reject(
+                new Error(
+                  `${name}: missing required column(s) ${missing.join(", ")}. Is this a SalesTaxDocumentLineDetail export?`,
+                ),
+              );
+              return;
+            }
+          }
+          for (const raw of results.data as Record<string, unknown>[]) {
+            const row = normalizeRow(raw, map, name);
+            if (!row) continue;
+            accumulateStats(stats, row, seen);
+            buffer.push(row);
+          }
+          if (buffer.length >= BATCH) {
+            const batch = buffer;
+            buffer = [];
+            parser.pause();
+            pending.push(
+              post("/api/ingest/rows", { uploadId, rows: batch })
+                .then((r: { inserted: number; duplicates: number }) => {
+                  counters.rows += batch.length;
+                  counters.inserted += r.inserted;
+                  counters.duplicates += r.duplicates;
+                  setProgress({ ...counters });
+                  parser.resume();
+                })
+                .catch((e) => {
+                  parser.abort();
+                  reject(e);
+                }),
+            );
+          }
+        },
+        complete: async () => {
+          try {
+            await Promise.all(pending);
+            if (buffer.length) {
+              const r = await post("/api/ingest/rows", { uploadId, rows: buffer });
+              counters.rows += buffer.length;
+              counters.inserted += r.inserted;
+              counters.duplicates += r.duplicates;
+              setProgress({ ...counters });
+            }
+            resolve();
+          } catch (e) {
+            reject(e);
+          }
+        },
+        error: (e) => reject(e),
+      });
+    });
+  }
+
+  async function handleFiles(files: FileList) {
+    setBusy(true);
+    setErrors([]);
+    setStats(null);
+    const counters: Progress = { phase: "Parsing", rows: 0, inserted: 0, duplicates: 0 };
+    setProgress(counters);
+
+    try {
+      const names = Array.from(files).map((f) => f.name).join(", ");
+      const { uploadId } = await post("/api/ingest/start", { filename: names, kind: "avalara" });
+
+      const runningStats = emptyStats();
+      const seen = new Set<string>();
+
+      for (const file of Array.from(files)) {
+        if (file.name.toLowerCase().endsWith(".zip")) {
+          const zip = await JSZip.loadAsync(file);
+          const entries = Object.values(zip.files).filter(
+            (f) => !f.dir && /\.csv$/i.test(f.name),
+          );
+          if (!entries.length) {
+            throw new Error(`${file.name}: the ZIP contains no CSV files. Export as CSV from Avalara.`);
+          }
+          for (const entry of entries) {
+            const blob = await entry.async("blob");
+            await parseCsv(blob, entry.name, uploadId, runningStats, seen, counters);
+          }
+        } else if (file.name.toLowerCase().endsWith(".csv")) {
+          await parseCsv(file, file.name, uploadId, runningStats, seen, counters);
+        } else {
+          throw new Error(
+            `${file.name}: only .csv and .zip are supported here. Re-export the Avalara report as CSV.`,
+          );
+        }
+      }
+
+      const finalStats = roundStats(runningStats);
+      await post("/api/ingest/finish", {
+        uploadId,
+        rowCount: counters.rows,
+        stats: finalStats as unknown as Record<string, unknown>,
+      });
+      setStats(finalStats);
+      setProgress({ ...counters, phase: "Done" });
+    } catch (e) {
+      setErrors([e instanceof Error ? e.message : String(e)]);
+    } finally {
+      setBusy(false);
+      if (inputRef.current) inputRef.current.value = "";
+    }
+  }
+
+  const partial =
+    stats && stats.minDate && stats.maxDate
+      ? stats.minDate.slice(8) !== "01" || !isMonthEnd(stats.maxDate)
+      : false;
+
+  return (
+    <section className="panel p-4">
+      <h2 className="text-[13px] font-semibold">Avalara export</h2>
+      <p className="mt-1 text-[12px] text-[var(--muted)]">
+        SalesTaxDocumentLineDetail export as CSV, or a ZIP of several. Parsed in your browser and
+        streamed in - large files are fine. Re-uploading a period is safe: duplicate rows are
+        ignored, never double-counted.
+      </p>
+
+      <div className="mt-3 flex items-center gap-3">
+        <input
+          ref={inputRef}
+          type="file"
+          multiple
+          accept=".csv,.zip"
+          disabled={busy}
+          onChange={(e) => e.target.files?.length && handleFiles(e.target.files)}
+          className="text-[13px]"
+        />
+      </div>
+
+      {progress && (
+        <div className="mt-3 text-[12px] text-[var(--muted)] tnum">
+          {progress.phase}: {progress.rows.toLocaleString()} rows read ·{" "}
+          {progress.inserted.toLocaleString()} inserted · {progress.duplicates.toLocaleString()}{" "}
+          duplicates skipped
+        </div>
+      )}
+
+      {errors.map((e, i) => (
+        <div key={i} className="callout callout-warn mt-3">{e}</div>
+      ))}
+
+      {stats && (
+        <div className="mt-4 space-y-3">
+          <div className="flex flex-wrap gap-4 text-[12px]">
+            <span><strong>{stats.rows.toLocaleString()}</strong> rows</span>
+            <span><strong>{stats.lines.toLocaleString()}</strong> unique document lines</span>
+            <span>Periods: <strong>{stats.periods.join(", ")}</strong></span>
+            <span>Dates: <strong>{stats.minDate} to {stats.maxDate}</strong></span>
+          </div>
+
+          {partial && (
+            <div className="callout callout-warn">
+              This file does not start on the 1st or end on a month end - the period may be only
+              partially covered. Check before filing.
+            </div>
+          )}
+          {stats.nonCommitted > 0 && (
+            <div className="callout callout-warn">
+              {stats.nonCommitted.toLocaleString()} row(s) are not in Committed status. Only committed
+              documents should be filed - re-export from Avalara with the Committed filter.
+            </div>
+          )}
+
+          <table className="grid">
+            <thead>
+              <tr>
+                <th>State</th>
+                <th className="num">Rows</th>
+                <th className="num">Gross</th>
+                <th className="num">Exempt</th>
+                <th className="num">Taxable</th>
+                <th className="num">Tax collected</th>
+                <th>Taxable + Exempt = Gross</th>
+              </tr>
+            </thead>
+            <tbody>
+              {Object.entries(stats.byState)
+                .sort(([a], [b]) => a.localeCompare(b))
+                .map(([state, s]) => {
+                  const ok = Math.abs(s.gross - (s.taxable + s.exempt)) <= 0.011;
+                  return (
+                    <tr key={state}>
+                      <td className="font-semibold">{state}</td>
+                      <td className="num">{s.rows.toLocaleString()}</td>
+                      <td className="num">{s.gross.toFixed(2)}</td>
+                      <td className="num">{s.exempt.toFixed(2)}</td>
+                      <td className="num">{s.taxable.toFixed(2)}</td>
+                      <td className="num">{s.tax.toFixed(2)}</td>
+                      <td>
+                        <span className={`badge ${ok ? "badge-filed" : "badge-overdue"}`}>
+                          {ok ? "OK" : "MISMATCH"}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function isMonthEnd(date: string) {
+  const d = new Date(`${date}T00:00:00Z`);
+  const next = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0));
+  return d.getUTCDate() === next.getUTCDate();
+}

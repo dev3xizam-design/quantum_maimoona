@@ -1,7 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  turbopack: { root: __dirname },
+  serverExternalPackages: ["exceljs"],
 };
 
 export default nextConfig;

@@ -1,0 +1,323 @@
+import {
+  pgTable,
+  serial,
+  text,
+  integer,
+  boolean,
+  numeric,
+  timestamp,
+  date,
+  jsonb,
+  index,
+  uniqueIndex,
+} from "drizzle-orm/pg-core";
+
+/* ------------------------------------------------------------------ */
+/* Auth                                                                */
+/* ------------------------------------------------------------------ */
+
+export const users = pgTable("users", {
+  id: serial("id").primaryKey(),
+  email: text("email").notNull().unique(),
+  name: text("name").notNull(),
+  passwordHash: text("password_hash").notNull(),
+  role: text("role").notNull().default("admin"), // admin | viewer
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/* ------------------------------------------------------------------ */
+/* Ingestion                                                           */
+/* ------------------------------------------------------------------ */
+
+export const uploads = pgTable("uploads", {
+  id: serial("id").primaryKey(),
+  filename: text("filename").notNull(),
+  kind: text("kind").notNull(), // avalara | purchases | products | shipments
+  rowCount: integer("row_count").notNull().default(0),
+  status: text("status").notNull().default("pending"), // pending | complete | failed
+  stats: jsonb("stats").$type<Record<string, unknown>>(),
+  uploadedBy: text("uploaded_by"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * One row per Avalara export row (i.e. per jurisdiction per line item).
+ * The file is PRE-EXPLODED by jurisdiction - see doc 04. Dedupe happens in
+ * the engine, never on ingest, so the raw truth is preserved.
+ */
+export const transactions = pgTable(
+  "transactions",
+  {
+    id: serial("id").primaryKey(),
+    uploadId: integer("upload_id").references(() => uploads.id, { onDelete: "cascade" }),
+    sourceFile: text("source_file"),
+
+    documentId: text("document_id").notNull(),
+    lineNo: text("line_no").notNull(),
+    ref1: text("ref1"),
+    documentStatus: text("document_status"),
+    docType: text("doc_type"), // Sales Invoice | Return Invoice
+    sign: integer("sign").notNull().default(1), // -1 for Return Invoice
+
+    documentDate: date("document_date"),
+    period: text("period").notNull(), // YYYY-MM
+    reportingDate: date("reporting_date"),
+    taxCalcDate: date("tax_calc_date"),
+
+    state: text("state").notNull(),
+    destCounty: text("dest_county"),
+    destCity: text("dest_city"),
+    destZip: text("dest_zip"),
+
+    jurisdictionType: text("jurisdiction_type"), // State | County | City | Special Tax Jurisdiction
+    jurisdictionDescription: text("jurisdiction_description"),
+    taxTypeDescription: text("tax_type_description"),
+
+    rate: numeric("rate", { precision: 12, scale: 8 }).notNull().default("0"),
+    lineAmount: numeric("line_amount", { precision: 18, scale: 4 }).notNull().default("0"),
+    discountAmount: numeric("discount_amount", { precision: 18, scale: 4 }).notNull().default("0"),
+    taxableAmount: numeric("taxable_amount", { precision: 18, scale: 4 }).notNull().default("0"),
+    exemptAmount: numeric("exempt_amount", { precision: 18, scale: 4 }).notNull().default("0"),
+    taxAmount: numeric("tax_amount", { precision: 18, scale: 4 }).notNull().default("0"),
+    quantity: numeric("quantity", { precision: 18, scale: 4 }).notNull().default("0"),
+
+    itemCode: text("item_code"),
+    itemDescription: text("item_description"),
+
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("tx_state_period_idx").on(t.state, t.period),
+    index("tx_period_idx").on(t.period),
+    index("tx_doc_idx").on(t.documentId, t.lineNo),
+    uniqueIndex("tx_dedupe_idx").on(
+      t.documentId,
+      t.lineNo,
+      t.jurisdictionType,
+      t.jurisdictionDescription,
+      t.itemCode,
+    ),
+  ],
+);
+
+/* ------------------------------------------------------------------ */
+/* Editable, effective-dated config                                    */
+/* ------------------------------------------------------------------ */
+
+export const stateTaxConfig = pgTable(
+  "state_tax_config",
+  {
+    id: serial("id").primaryKey(),
+    state: text("state").notNull(),
+    taxType: text("tax_type").notNull(), // sales | excise | pact
+    frequency: text("frequency").notNull().default("MONTHLY"), // MONTHLY | QUARTERLY | ANNUAL | NONE
+    stateRate: numeric("state_rate", { precision: 12, scale: 8 }).notNull().default("0"),
+    hasLocal: boolean("has_local").notNull().default(false),
+    allocation: text("allocation").notNull().default("flat"),
+    // flat | county | city_county | az_region | pa_columns | fl_surtax | none
+    rounding: text("rounding").notNull().default("cents"), // cents | whole_dollar
+    portal: text("portal"),
+    formName: text("form_name"),
+    dueDay: integer("due_day").default(20),
+    rateLabel: text("rate_label"),
+    notes: text("notes"),
+    active: boolean("active").notNull().default(true),
+    effectiveFrom: date("effective_from").notNull(),
+    effectiveTo: date("effective_to"),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("stc_lookup_idx").on(t.state, t.taxType, t.effectiveFrom)],
+);
+
+export const jurisdictionCodes = pgTable(
+  "jurisdiction_codes",
+  {
+    id: serial("id").primaryKey(),
+    state: text("state").notNull(),
+    jurisdictionName: text("jurisdiction_name").notNull(),
+    jurisdictionType: text("jurisdiction_type").notNull(), // county | city | local | special
+    officialCode: text("official_code").notNull(),
+    /** For OK: the county COPO code this city row must be paired with. */
+    pairedCode: text("paired_code"),
+    pairedName: text("paired_name"),
+    rate: numeric("rate", { precision: 12, scale: 8 }),
+    /** True when the published rate already includes the state rate (WY, AZ counties). */
+    rateIncludesState: boolean("rate_includes_state").notNull().default(false),
+    /** Avalara's jurisdiction description that maps here (e.g. "Edmond" -> OKC). */
+    avalaraAlias: text("avalara_alias"),
+    notes: text("notes"),
+    effectiveFrom: date("effective_from").notNull(),
+    effectiveTo: date("effective_to"),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("jc_lookup_idx").on(t.state, t.jurisdictionType, t.jurisdictionName)],
+);
+
+export const exciseConfig = pgTable(
+  "excise_config",
+  {
+    id: serial("id").primaryKey(),
+    state: text("state").notNull(),
+    structure: text("structure").notNull(), // A | B | C | D | E
+    basis: text("basis").notNull().default("SALES"), // SALES | RECEIPTS
+    /** Structures A-D use these. */
+    rate: numeric("rate", { precision: 12, scale: 8 }).notNull().default("0"),
+    rateUnit: text("rate_unit").notNull().default("pct_wholesale"),
+    // pct_wholesale | pct_retail | per_ml | per_unit
+    /** Structure E (bifurcated). */
+    openRate: numeric("open_rate", { precision: 12, scale: 8 }),
+    openRateUnit: text("open_rate_unit"),
+    closedRate: numeric("closed_rate", { precision: 12, scale: 8 }),
+    closedRateUnit: text("closed_rate_unit"),
+    frequency: text("frequency").notNull().default("MONTHLY"),
+    portal: text("portal"),
+    formName: text("form_name"),
+    dueDay: integer("due_day").default(20),
+    notes: text("notes"),
+    active: boolean("active").notNull().default(true),
+    effectiveFrom: date("effective_from").notNull(),
+    effectiveTo: date("effective_to"),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("ec_lookup_idx").on(t.state, t.effectiveFrom)],
+);
+
+export const nexusThresholds = pgTable("nexus_thresholds", {
+  id: serial("id").primaryKey(),
+  state: text("state").notNull(),
+  amountThreshold: numeric("amount_threshold", { precision: 18, scale: 2 }),
+  txnThreshold: integer("txn_threshold"),
+  notes: text("notes"),
+  effectiveFrom: date("effective_from").notNull(),
+  effectiveTo: date("effective_to"),
+});
+
+/** Non-secret filing identifiers only. NEVER store portal passwords/PINs/cards. */
+export const accounts = pgTable("accounts", {
+  id: serial("id").primaryKey(),
+  state: text("state").notNull(),
+  taxType: text("tax_type").notNull(),
+  accountNumber: text("account_number"),
+  licenseNumber: text("license_number"),
+  loginField: text("login_field"),
+  frequencyOverride: text("frequency_override"),
+  notes: text("notes"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/* ------------------------------------------------------------------ */
+/* Excise source data                                                  */
+/* ------------------------------------------------------------------ */
+
+export const products = pgTable("products", {
+  id: serial("id").primaryKey(),
+  sku: text("sku").notNull().unique(),
+  description: text("description"),
+  wholesaleCost: numeric("wholesale_cost", { precision: 18, scale: 4 }),
+  retailPrice: numeric("retail_price", { precision: 18, scale: 4 }),
+  liquidMl: numeric("liquid_ml", { precision: 12, scale: 4 }),
+  cartridgesPerUnit: numeric("cartridges_per_unit", { precision: 12, scale: 4 }),
+  systemType: text("system_type"), // OPEN | CLOSED
+  containsNicotine: boolean("contains_nicotine").notNull().default(true),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** Monthly purchases/receipts - the basis for RECEIPTS-basis excise (KS EC-2). */
+export const purchases = pgTable(
+  "purchases",
+  {
+    id: serial("id").primaryKey(),
+    uploadId: integer("upload_id").references(() => uploads.id, { onDelete: "cascade" }),
+    period: text("period").notNull(),
+    state: text("state"),
+    sku: text("sku"),
+    description: text("description"),
+    quantity: numeric("quantity", { precision: 18, scale: 4 }).notNull().default("0"),
+    mlTotal: numeric("ml_total", { precision: 18, scale: 4 }).notNull().default("0"),
+    unitsTotal: numeric("units_total", { precision: 18, scale: 4 }).notNull().default("0"),
+    wholesaleCost: numeric("wholesale_cost", { precision: 18, scale: 4 }).notNull().default("0"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("purch_period_idx").on(t.period, t.state)],
+);
+
+/** PACT Act shipment feed - customer PII. Restricted, never logged. */
+export const shipments = pgTable(
+  "shipments",
+  {
+    id: serial("id").primaryKey(),
+    uploadId: integer("upload_id").references(() => uploads.id, { onDelete: "cascade" }),
+    period: text("period").notNull(),
+    state: text("state").notNull(),
+    customerName: text("customer_name"),
+    shipToAddress: text("ship_to_address"),
+    shipToCity: text("ship_to_city"),
+    shipToState: text("ship_to_state"),
+    shipToZip: text("ship_to_zip"),
+    invoiceDate: date("invoice_date"),
+    invoiceNumber: text("invoice_number"),
+    product: text("product"),
+    brand: text("brand"),
+    quantity: numeric("quantity", { precision: 18, scale: 4 }).notNull().default("0"),
+    mlTotal: numeric("ml_total", { precision: 18, scale: 4 }).notNull().default("0"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("ship_period_state_idx").on(t.period, t.state)],
+);
+
+/* ------------------------------------------------------------------ */
+/* Filing lifecycle                                                    */
+/* ------------------------------------------------------------------ */
+
+export const filings = pgTable(
+  "filings",
+  {
+    id: serial("id").primaryKey(),
+    state: text("state").notNull(),
+    taxType: text("tax_type").notNull(),
+    period: text("period").notNull(), // YYYY-MM | YYYY-Qn | YYYY
+    status: text("status").notNull().default("not_started"), // not_started | ready | filed
+    dueDate: date("due_date"),
+    gross: numeric("gross", { precision: 18, scale: 4 }),
+    exempt: numeric("exempt", { precision: 18, scale: 4 }),
+    taxable: numeric("taxable", { precision: 18, scale: 4 }),
+    taxComputed: numeric("tax_computed", { precision: 18, scale: 4 }),
+    taxCollected: numeric("tax_collected", { precision: 18, scale: 4 }),
+    delta: numeric("delta", { precision: 18, scale: 4 }),
+    result: jsonb("result").$type<Record<string, unknown>>(),
+    filedAt: timestamp("filed_at", { withTimezone: true }),
+    filedBy: text("filed_by"),
+    confirmationNumber: text("confirmation_number"),
+    amountPaid: numeric("amount_paid", { precision: 18, scale: 4 }),
+    notes: text("notes"),
+    computedAt: timestamp("computed_at", { withTimezone: true }),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("filing_unique_idx").on(t.state, t.taxType, t.period)],
+);
+
+/* ------------------------------------------------------------------ */
+/* Audit                                                               */
+/* ------------------------------------------------------------------ */
+
+export const changeLog = pgTable("change_log", {
+  id: serial("id").primaryKey(),
+  actor: text("actor"),
+  tableName: text("table_name").notNull(),
+  rowId: integer("row_id"),
+  action: text("action").notNull(), // create | update | delete
+  before: jsonb("before"),
+  after: jsonb("after"),
+  effectiveFrom: date("effective_from"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const runLog = pgTable("run_log", {
+  id: serial("id").primaryKey(),
+  period: text("period").notNull(),
+  actor: text("actor"),
+  status: text("status").notNull().default("running"),
+  summary: jsonb("summary"),
+  startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+  finishedAt: timestamp("finished_at", { withTimezone: true }),
+});
