@@ -10,7 +10,7 @@
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
     "db:migrate": "drizzle-kit migrate",
-    "db:seed": "tsx scripts/seed.ts",
+    "db:seed": "tsx --conditions=react-server scripts/seed.ts",
     "db:studio": "drizzle-kit studio",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test scripts/test-engine.ts",
@@ -18,6 +18,8 @@
     "test:all": "npm test && npm run test:integration"
   },
   "dependencies": {
+    "@neon/config": "^1.3.2",
+    "@neon/env": "^1.2.3",
     "bcryptjs": "^3.0.3",
     "drizzle-orm": "^0.45.2",
     "exceljs": "^4.4.0",

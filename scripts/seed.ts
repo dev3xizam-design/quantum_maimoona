@@ -5,7 +5,7 @@
  *
  *   npm run db:seed -- --email you@example.com --password 'a-strong-one' --name 'Your Name'
  */
-import "dotenv/config";
+import "../src/lib/load-env";
 import { eq, and } from "drizzle-orm";
 import { db, sql } from "../src/db";
 import {
@@ -25,7 +25,7 @@ import {
   PACT_STATES,
   SALES_SEED,
 } from "../src/lib/seed-data";
-import { hashPassword } from "../src/lib/auth";
+import { hashPassword } from "../src/lib/password";
 
 function arg(name: string): string | undefined {
   const i = process.argv.indexOf(`--${name}`);

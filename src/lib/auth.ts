@@ -2,10 +2,10 @@ import "server-only";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { SignJWT, jwtVerify } from "jose";
-import bcrypt from "bcryptjs";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { users } from "@/db/schema";
+import { hashPassword, verifyPassword } from "./password";
 
 const COOKIE = "mvtax_session";
 const MAX_AGE = 60 * 60 * 12; // 12 hours
@@ -69,14 +69,12 @@ export async function verifyLogin(email: string, password: string): Promise<Sess
     .where(eq(users.email, email.trim().toLowerCase()))
     .limit(1);
   if (!user) return null;
-  const ok = await bcrypt.compare(password, user.passwordHash);
+  const ok = await verifyPassword(password, user.passwordHash);
   if (!ok) return null;
   return { userId: user.id, email: user.email, name: user.name, role: user.role };
 }
 
-export async function hashPassword(password: string) {
-  return bcrypt.hash(password, 10);
-}
+export { hashPassword };
 
 export async function countUsers(): Promise<number> {
   const rows = await db.select({ id: users.id }).from(users);

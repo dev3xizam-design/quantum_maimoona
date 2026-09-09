@@ -33,9 +33,9 @@ DATABASE_URL="$DB_URL" npx drizzle-kit push --force
 
 echo "Loading state rules..."
 if [ -n "$EMAIL" ] && [ -n "$PASSWORD" ]; then
-  DATABASE_URL="$DB_URL" npx tsx scripts/seed.ts --email "$EMAIL" --password "$PASSWORD" --name "$NAME"
+  DATABASE_URL="$DB_URL" npx tsx --conditions=react-server scripts/seed.ts --email "$EMAIL" --password "$PASSWORD" --name "$NAME"
 else
-  DATABASE_URL="$DB_URL" npx tsx scripts/seed.ts
+  DATABASE_URL="$DB_URL" npx tsx --conditions=react-server scripts/seed.ts
 fi
 
 echo
