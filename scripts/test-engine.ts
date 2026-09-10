@@ -277,3 +277,83 @@ test("mL is parsed from bottled e-juice names but not invented for pods", () => 
   assert.equal(parseMlFromDescription("Blue Razz 100 ml"), 100);
   assert.equal(parseMlFromDescription("Disposable Pod 5000 Puffs"), null);
 });
+
+/* ------------------------------------------------------------------ */
+/* Product classification - reads names, never invents numbers         */
+/* ------------------------------------------------------------------ */
+
+test("volume is read from the name only when the name states it", async () => {
+  const { classifyProduct } = await import("../src/lib/products/classify");
+
+  assert.equal(classifyProduct("Strawberry Ice 100ML Salt Nic").liquidMl, 100);
+  assert.equal(classifyProduct("Blue Razz 60 mL Freebase").liquidMl, 60);
+  assert.equal(classifyProduct("Elf Bar BC5000 13ML Disposable").liquidMl, 13);
+
+  // A puff count is NOT a volume - converting it would be a guess on a return.
+  assert.equal(classifyProduct("Geek Bar Pulse 15000 Puffs").liquidMl, null);
+  assert.equal(classifyProduct("Mystery Pod").liquidMl, null);
+});
+
+test("open vs closed is inferred from device wording, and left null when ambiguous", async () => {
+  const { classifyProduct } = await import("../src/lib/products/classify");
+
+  assert.equal(classifyProduct("Naked 100 Lava Flow 60ML E-Liquid").systemType, "OPEN");
+  assert.equal(classifyProduct("Juul Pods Menthol 4 Pack").systemType, "CLOSED");
+  assert.equal(classifyProduct("Lost Mary MO5000 Disposable").systemType, "CLOSED");
+
+  // Bottle-sized volume with no device wording is refillable liquid.
+  assert.equal(classifyProduct("Cloud Nurdz Grape Apple 100ML").systemType, "OPEN");
+
+  // Both open and closed wording - a human must decide, so do not pick one.
+  const ambiguous = classifyProduct("Refill Pods for Open System");
+  assert.equal(ambiguous.systemType, null);
+  assert.match(ambiguous.systemEvidence ?? "", /ambiguous/);
+});
+
+test("pack size and hardware are recognised", async () => {
+  const { classifyProduct } = await import("../src/lib/products/classify");
+
+  assert.equal(classifyProduct("Vuse Alto Pods 2 Pack").cartridgesPerUnit, 2);
+  assert.equal(classifyProduct("SMOK Novo Pods 3ct").cartridgesPerUnit, 3);
+
+  const coil = classifyProduct("SMOK RPM Replacement Coils 5 Pack");
+  assert.equal(coil.isHardware, true);
+  assert.equal(coil.containsNicotine, false, "coils are not consumable nicotine material");
+  assert.equal(coil.systemType, null);
+
+  const zero = classifyProduct("Pachamama 0MG Zero Nicotine 60ML");
+  assert.equal(zero.containsNicotine, false);
+});
+
+test("classification explains itself so the number is auditable", async () => {
+  const { classifyProduct, classificationSummary } = await import("../src/lib/products/classify");
+  const summary = classificationSummary(classifyProduct("Juul Pods Mango 4 Pack"));
+  assert.match(summary, /4 per unit/);
+  assert.match(summary, /pod/);
+});
+
+test("excise names the SKUs that are missing cost rather than silently under-taxing", () => {
+  const r = computeExcise({
+    config: {
+      state: "PA", structure: "A", basis: "SALES", rate: 0.4, rateUnit: "pct_wholesale",
+      openRate: null, openRateUnit: null, closedRate: null, closedRateUnit: null,
+      frequency: "MONTHLY", portal: null, formName: null, dueDay: 20, notes: null,
+    },
+    period: "2026-07",
+    rows: [
+      line("INV1", "1", "State", { amount: 900, taxable: 900 }, { itemCode: "HASCOST", quantity: 10 }),
+      line("INV2", "1", "State", { amount: 2500, taxable: 2500 }, { itemCode: "NOCOST", quantity: 25 }),
+    ],
+    purchases: [],
+    products: [
+      { sku: "HASCOST", description: "Priced", wholesaleCost: 20, retailPrice: 90, liquidMl: 60, cartridgesPerUnit: 1, systemType: "OPEN", containsNicotine: true },
+      { sku: "NOCOST", description: "No cost loaded", wholesaleCost: null, retailPrice: 100, liquidMl: 60, cartridgesPerUnit: 1, systemType: "OPEN", containsNicotine: true },
+    ],
+  });
+
+  assert.equal(r.taxComputed, 80, "only the SKU with a cost contributes: 10 x 20 x 40%");
+  assert.equal(r.dataGaps.cost.length, 1);
+  assert.equal(r.dataGaps.cost[0].sku, "NOCOST");
+  assert.equal(r.dataGaps.cost[0].retail, 2500, "the affected revenue is quantified");
+  assert.ok(r.warnings.some((w) => w.includes("WHOLESALE COST MISSING") && w.includes("NOCOST")));
+});

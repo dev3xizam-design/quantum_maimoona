@@ -173,6 +173,50 @@ export default async function ReturnPage({
                 <Row label="Excise tax due" value={fmtMoney(result.taxComputed)} strong />
               </section>
 
+              {(result.dataGaps.cost.length > 0 ||
+                result.dataGaps.ml.length > 0 ||
+                result.dataGaps.systemType.length > 0) && (
+                <section className="panel overflow-hidden">
+                  <h2 className="border-b border-[var(--line)] px-4 py-3 text-[13px] font-semibold">
+                    SKUs blocking this return
+                  </h2>
+                  <table className="grid">
+                    <thead>
+                      <tr>
+                        <th>SKU</th>
+                        <th>Product</th>
+                        <th>Missing</th>
+                        <th className="num">Units</th>
+                        <th className="num">Retail this period</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[
+                        ...result.dataGaps.cost.map((g) => ({ ...g, missing: "wholesale cost" })),
+                        ...result.dataGaps.ml.map((g) => ({ ...g, missing: "mL per unit" })),
+                        ...result.dataGaps.systemType.map((g) => ({ ...g, missing: "open/closed" })),
+                      ]
+                        .sort((a, b) => b.retail - a.retail)
+                        .slice(0, 25)
+                        .map((g, i) => (
+                          <tr key={`${g.sku}-${g.missing}-${i}`}>
+                            <td className="font-mono text-[11px] font-semibold">{g.sku}</td>
+                            <td className="max-w-[280px] truncate">{g.description ?? "—"}</td>
+                            <td className="text-[var(--danger)]">{g.missing}</td>
+                            <td className="num">{g.units.toLocaleString()}</td>
+                            <td className="num">{fmtMoney(g.retail)}</td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                  <div className="border-t border-[var(--line)] px-4 py-3">
+                    <Link href="/products" className="btn btn-sm btn-primary">
+                      Fill these in on Products
+                    </Link>
+                  </div>
+                </section>
+              )}
+
               <section className="panel overflow-hidden">
                 <h2 className="border-b border-[var(--line)] px-4 py-3 text-[13px] font-semibold">
                   Calculation

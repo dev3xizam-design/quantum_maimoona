@@ -98,6 +98,25 @@ export function computeExcise(opts: {
   const closed = zeroBasket();
   const unknown = zeroBasket();
   const missingSkus = new Set<string>();
+  /** SKUs actually used this period that are missing something the rate needs. */
+  const gaps = {
+    cost: new Map<string, { units: number; retail: number; description: string | null }>(),
+    ml: new Map<string, { units: number; retail: number; description: string | null }>(),
+    system: new Map<string, { units: number; retail: number; description: string | null }>(),
+  };
+  const noteGap = (
+    which: keyof typeof gaps,
+    sku: string,
+    description: string | null,
+    units: number,
+    retail: number,
+  ) => {
+    if (!sku) return;
+    const e = gaps[which].get(sku) ?? { units: 0, retail: 0, description };
+    e.units += units;
+    e.retail += retail;
+    gaps[which].set(sku, e);
+  };
   let skuTotal = 0;
   let skuMatched = 0;
 
@@ -119,15 +138,22 @@ export function computeExcise(opts: {
       else if (p.sku) missingSkus.add(p.sku);
 
       const b = bucketFor(product?.systemType);
-      const ml =
-        p.mlTotal ||
-        (product?.liquidMl ?? parseMlFromDescription(p.description) ?? 0) * p.quantity;
+      const mlPerUnit = product?.liquidMl ?? parseMlFromDescription(p.description) ?? null;
+      const ml = p.mlTotal || (mlPerUnit ?? 0) * p.quantity;
       const units = p.unitsTotal || p.quantity;
+      const cost = p.wholesaleCost || (product?.wholesaleCost ?? 0) * p.quantity;
+      const retail = (product?.retailPrice ?? 0) * p.quantity;
+
       b.ml += ml;
       b.units += units;
       b.cartridges += (product?.cartridgesPerUnit ?? 1) * p.quantity;
-      b.wholesale += p.wholesaleCost || (product?.wholesaleCost ?? 0) * p.quantity;
-      b.retail += (product?.retailPrice ?? 0) * p.quantity;
+      b.wholesale += cost;
+      b.retail += retail;
+
+      const key = (p.sku ?? "").trim().toUpperCase();
+      if (cost === 0) noteGap("cost", key, p.description ?? null, units, retail);
+      if (!p.mlTotal && mlPerUnit === null) noteGap("ml", key, p.description ?? null, units, retail);
+      if (!product?.systemType) noteGap("system", key, p.description ?? null, units, retail);
     }
     if (!opts.purchases.length) {
       warnings.push(
@@ -147,12 +173,22 @@ export function computeExcise(opts: {
       else if (sku) missingSkus.add(sku);
 
       const b = bucketFor(product?.systemType);
-      const mlPerUnit = product?.liquidMl ?? parseMlFromDescription(r.itemDescription) ?? 0;
-      b.ml += mlPerUnit * qty;
+      const mlPerUnit = product?.liquidMl ?? parseMlFromDescription(r.itemDescription) ?? null;
+      const cost = (product?.wholesaleCost ?? 0) * qty;
+      // The line amount IS the retail price actually charged - use it over any
+      // list price on the product record.
+      const retail = lineRetail || (product?.retailPrice ?? 0) * qty;
+
+      b.ml += (mlPerUnit ?? 0) * qty;
       b.units += qty;
       b.cartridges += (product?.cartridgesPerUnit ?? 1) * qty;
-      b.wholesale += (product?.wholesaleCost ?? 0) * qty;
-      b.retail += lineRetail || (product?.retailPrice ?? 0) * qty;
+      b.wholesale += cost;
+      b.retail += retail;
+
+      const desc = product?.description ?? r.itemDescription ?? null;
+      if (cost === 0) noteGap("cost", sku, desc, qty, retail);
+      if (mlPerUnit === null) noteGap("ml", sku, desc, qty, retail);
+      if (!product?.systemType) noteGap("system", sku, desc, qty, retail);
     }
   }
 
@@ -185,19 +221,55 @@ export function computeExcise(opts: {
 
   const taxComputed = round2(components.reduce((s, c) => s + c.tax, 0));
 
-  if (structure !== "E" && config.rateUnit === "pct_wholesale" && all.wholesale === 0) {
+  /* ---- Data-gap reporting -------------------------------------------
+   * A missing wholesale cost or mL is NOT a rounding issue - it silently
+   * understates the tax. Name the SKUs, ranked by the revenue they carry, so
+   * the biggest gaps get filled first.
+   */
+  const usesCost =
+    config.rateUnit === "pct_wholesale" ||
+    config.openRateUnit === "pct_wholesale" ||
+    config.closedRateUnit === "pct_wholesale";
+  const usesMl =
+    config.rateUnit === "per_ml" ||
+    config.openRateUnit === "per_ml" ||
+    config.closedRateUnit === "per_ml";
+
+  const rank = (m: Map<string, { units: number; retail: number; description: string | null }>) =>
+    [...m.entries()]
+      .map(([sku, v]) => ({ sku, ...v, retail: round2(v.retail), units: round2(v.units) }))
+      .sort((a, b) => b.retail - a.retail);
+
+  const costGaps = rank(gaps.cost);
+  const mlGaps = rank(gaps.ml);
+  const systemGaps = rank(gaps.system);
+
+  const listSkus = (rows: { sku: string; retail: number }[]) =>
+    rows
+      .slice(0, 5)
+      .map((r) => `${r.sku} (${r.retail.toFixed(2)})`)
+      .join(", ") + (rows.length > 5 ? `, +${rows.length - 5} more` : "");
+
+  if (usesCost && costGaps.length) {
+    const affected = round2(costGaps.reduce((s, r) => s + r.retail, 0));
     warnings.push(
-      "Wholesale cost basis is zero - the product master has no wholesale_cost for these SKUs. Load it before filing.",
+      `WHOLESALE COST MISSING for ${costGaps.length} SKU(s) covering ${affected.toFixed(2)} of retail this period, so the tax below is understated. A sales-tax export does not carry cost - upload the purchase import, or enter the cost on the Products page. Biggest first: ${listSkus(costGaps)}.`,
     );
   }
-  if (structure !== "E" && config.rateUnit === "per_ml" && all.ml === 0) {
+  if (usesMl && mlGaps.length) {
+    const affected = round2(mlGaps.reduce((s, r) => s + r.retail, 0));
     warnings.push(
-      "mL basis is zero - pods/disposables rarely state mL in the item name, so liquid_ml must come from the product master.",
+      `mL MISSING for ${mlGaps.length} SKU(s) covering ${affected.toFixed(2)} of retail this period. Pods and disposables rarely state a volume in the name, so it has to be entered once per SKU on the Products page. Biggest first: ${listSkus(mlGaps)}.`,
+    );
+  }
+  if (structure === "E" && systemGaps.length) {
+    warnings.push(
+      `OPEN/CLOSED NOT SET for ${systemGaps.length} SKU(s) in a bifurcated state - they are excluded from both rate buckets. Set them on the Products page (bulk-select works). Biggest first: ${listSkus(systemGaps)}.`,
     );
   }
   if (missingSkus.size) {
-    warnings.push(
-      `${missingSkus.size} SKU(s) are not in the product master: ${[...missingSkus].slice(0, 10).join(", ")}${missingSkus.size > 10 ? "..." : ""}`,
+    notes.push(
+      `${missingSkus.size} SKU(s) sold this period are not yet in the product master. Upload again or press Rebuild catalog on the Products page.`,
     );
   }
   if (config.notes) notes.push(config.notes);
@@ -221,6 +293,7 @@ export function computeExcise(opts: {
     components,
     taxComputed,
     skuCoverage: { total: skuTotal, matched: skuMatched, missing: [...missingSkus] },
+    dataGaps: { cost: costGaps, ml: mlGaps, systemType: systemGaps },
     notes,
     warnings,
   };

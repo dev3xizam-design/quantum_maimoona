@@ -23,6 +23,27 @@ async function main() {
   for (const c of cells.filter((c) => ["KS", "IL", "NJ", "IN"].includes(c.state))) {
     console.log(`  ${c.state} ${c.taxType.padEnd(6)} ${c.frequency.padEnd(9)} period ${c.period.padEnd(7)} due ${c.dueDate}`);
   }
+  const { db } = await import("../src/db");
+  const { sql: dsql } = await import("drizzle-orm");
+  const cols = await db.execute(dsql`
+    select column_name from information_schema.columns
+    where table_name = 'products' order by ordinal_position
+  `);
+  const names = (Array.isArray(cols) ? cols : (cols as { rows: Record<string, unknown>[] }).rows)
+    .map((c) => String(c.column_name));
+  const required = [
+    "observed_unit_price", "observed_unit_cost", "units_sold", "revenue", "line_count",
+    "states_sold", "price_source", "cost_source", "ml_source", "system_type_source",
+    "locked_fields", "needs_review",
+  ];
+  const missing = required.filter((c) => !names.includes(c));
+  console.log(`\nproducts table    : ${names.length} columns`);
+  console.log(`catalog columns   : ${missing.length === 0 ? "all present" : "MISSING " + missing.join(", ")}`);
+
+  const { products } = await import("../src/db/schema");
+  const rows = await db.select().from(products);
+  console.log(`products stored   : ${rows.length}`);
+
   await sql.end();
 }
 main();

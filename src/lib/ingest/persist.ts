@@ -1,4 +1,5 @@
 import "server-only";
+import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { products, purchases, shipments, transactions } from "@/db/schema";
 import type { NormalizedRow } from "./avalara";
@@ -62,23 +63,55 @@ export type ProductInput = {
   containsNicotine?: boolean;
 };
 
+/**
+ * A product-master CSV is a deliberate human statement, so every value it
+ * carries is locked the same way an on-screen edit is - a later catalog
+ * rebuild refreshes the observed figures around it but never overwrites it.
+ */
 export async function upsertProducts(rows: ProductInput[]) {
   let count = 0;
   for (const r of rows) {
     if (!r.sku) continue;
-    const values = {
-      sku: r.sku.trim().toUpperCase(),
-      description: r.description ?? null,
-      wholesaleCost: r.wholesaleCost === null || r.wholesaleCost === undefined ? null : n(r.wholesaleCost),
-      retailPrice: r.retailPrice === null || r.retailPrice === undefined ? null : n(r.retailPrice),
-      liquidMl: r.liquidMl === null || r.liquidMl === undefined ? null : n(r.liquidMl),
-      cartridgesPerUnit:
-        r.cartridgesPerUnit === null || r.cartridgesPerUnit === undefined ? null : n(r.cartridgesPerUnit),
-      systemType: r.systemType ? r.systemType.trim().toUpperCase() : null,
-      containsNicotine: r.containsNicotine ?? true,
-      updatedAt: new Date(),
+    const sku = r.sku.trim().toUpperCase();
+    const [prior] = await db.select().from(products).where(eq(products.sku, sku)).limit(1);
+    const locked = new Set(prior?.lockedFields ?? []);
+
+    const set: Record<string, unknown> = { sku, updatedAt: new Date() };
+    const put = (field: string, value: number | string | boolean | null | undefined, source?: string) => {
+      if (value === null || value === undefined || value === "") return;
+      set[field] = typeof value === "number" ? String(value) : value;
+      locked.add(field);
+      if (source) set[source] = "manual";
     };
-    await db.insert(products).values(values).onConflictDoUpdate({ target: products.sku, set: values });
+
+    put("description", r.description ?? undefined);
+    put("wholesaleCost", r.wholesaleCost ?? undefined, "costSource");
+    put("retailPrice", r.retailPrice ?? undefined, "priceSource");
+    put("liquidMl", r.liquidMl ?? undefined, "mlSource");
+    put("cartridgesPerUnit", r.cartridgesPerUnit ?? undefined);
+    if (r.systemType) {
+      set.systemType = r.systemType.trim().toUpperCase();
+      set.systemTypeSource = "manual";
+      locked.add("systemType");
+    }
+    if (r.containsNicotine !== undefined) {
+      set.containsNicotine = r.containsNicotine;
+      locked.add("containsNicotine");
+    }
+    set.lockedFields = [...locked];
+
+    const nicotine = (set.containsNicotine ?? prior?.containsNicotine ?? true) as boolean;
+    set.needsReview =
+      nicotine &&
+      ((set.wholesaleCost ?? prior?.wholesaleCost ?? null) === null ||
+        (set.systemType ?? prior?.systemType ?? null) === null ||
+        (set.liquidMl ?? prior?.liquidMl ?? null) === null);
+
+    if (prior) {
+      await db.update(products).set(set).where(eq(products.id, prior.id));
+    } else {
+      await db.insert(products).values(set as typeof products.$inferInsert);
+    }
     count += 1;
   }
   return count;

@@ -268,6 +268,31 @@ function exciseDetailSheet(wb: ExcelJS.Workbook, r: ExciseResult) {
   if (r.skuCoverage.missing.length) {
     ws.addRow(["Missing SKUs", r.skuCoverage.missing.join(", ")]).getCell(2).alignment = { wrapText: true };
   }
+
+  const gapRows = [
+    ...r.dataGaps.cost.map((g) => ({ ...g, missing: "wholesale cost" })),
+    ...r.dataGaps.ml.map((g) => ({ ...g, missing: "mL per unit" })),
+    ...r.dataGaps.systemType.map((g) => ({ ...g, missing: "open/closed" })),
+  ].sort((a, b) => b.retail - a.retail);
+
+  if (gapRows.length) {
+    spacer(ws);
+    sectionRow(ws, "SKUs missing data this return needs (ranked by revenue)", 6);
+    headerRow(ws, ["SKU", "Product", "Missing", "Units", "Retail this period", ""]);
+    for (const g of gapRows.slice(0, 100)) {
+      const row = ws.addRow([g.sku, g.description ?? "", g.missing, g.units, g.retail, ""]);
+      row.getCell(4).numFmt = QTY_FMT;
+      row.getCell(5).numFmt = MONEY_FMT;
+      fill(row.getCell(3), `FF${WARN}`);
+    }
+    spacer(ws);
+    noteRow(
+      ws,
+      "Each row above contributes ZERO to the tax computed on the Return tab, so the figure is understated until they are filled in on the Products page (or the purchase import is uploaded for cost).",
+      "warn",
+      6,
+    );
+  }
   return ws;
 }
 

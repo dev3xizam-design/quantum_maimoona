@@ -73,6 +73,13 @@ export type SalesResult = {
   warnings: string[];
 };
 
+export type SkuGap = {
+  sku: string;
+  description: string | null;
+  units: number;
+  retail: number;
+};
+
 export type ExciseComponent = {
   label: string;
   basisLabel: string;
@@ -101,6 +108,12 @@ export type ExciseResult = {
   components: ExciseComponent[];
   taxComputed: number;
   skuCoverage: { total: number; matched: number; missing: string[] };
+  /** SKUs used this period that are missing data the rate needs, ranked by revenue. */
+  dataGaps: {
+    cost: SkuGap[];
+    ml: SkuGap[];
+    systemType: SkuGap[];
+  };
   notes: string[];
   warnings: string[];
 };

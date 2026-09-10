@@ -8,6 +8,13 @@
       "when": 1788992557531,
       "tag": "0000_absent_celestials",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1789038676416,
+      "tag": "0001_bored_lucky_pierre",
+      "breakpoints": true
     }
   ]
 }

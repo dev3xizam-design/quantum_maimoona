@@ -209,16 +209,49 @@ export const accounts = pgTable("accounts", {
 /* Excise source data                                                  */
 /* ------------------------------------------------------------------ */
 
+/**
+ * The product master. Most of it BUILDS ITSELF from the Avalara export - every
+ * line carries an item code, a name, a quantity and a line amount, so the SKU
+ * list, the descriptions and the real selling prices are all derivable. Only
+ * what genuinely is not in the sales data (wholesale cost, and mL for pods)
+ * needs a human, and the dashboard sorts those by revenue so the SKUs that
+ * matter come first.
+ *
+ * `lockedFields` holds the names of fields a human has set. The deriver never
+ * overwrites those, so a manual correction survives every future upload.
+ */
 export const products = pgTable("products", {
   id: serial("id").primaryKey(),
   sku: text("sku").notNull().unique(),
   description: text("description"),
+
+  /* Effective values the engine reads (manual value wins over derived). */
   wholesaleCost: numeric("wholesale_cost", { precision: 18, scale: 4 }),
   retailPrice: numeric("retail_price", { precision: 18, scale: 4 }),
   liquidMl: numeric("liquid_ml", { precision: 12, scale: 4 }),
   cartridgesPerUnit: numeric("cartridges_per_unit", { precision: 12, scale: 4 }),
   systemType: text("system_type"), // OPEN | CLOSED
   containsNicotine: boolean("contains_nicotine").notNull().default(true),
+
+  /* Observed from the transactions - evidence, never overwritten by hand. */
+  observedUnitPrice: numeric("observed_unit_price", { precision: 18, scale: 4 }),
+  observedUnitCost: numeric("observed_unit_cost", { precision: 18, scale: 4 }),
+  unitsSold: numeric("units_sold", { precision: 18, scale: 4 }).notNull().default("0"),
+  revenue: numeric("revenue", { precision: 18, scale: 4 }).notNull().default("0"),
+  lineCount: integer("line_count").notNull().default(0),
+  statesSold: text("states_sold").array(),
+  firstSeen: date("first_seen"),
+  lastSeen: date("last_seen"),
+
+  /* Provenance so the UI can show what is measured vs parsed vs assumed. */
+  priceSource: text("price_source").default("unknown"), // observed | manual | unknown
+  costSource: text("cost_source").default("unknown"), // purchases | manual | estimated | unknown
+  mlSource: text("ml_source").default("unknown"), // parsed | manual | unknown
+  systemTypeSource: text("system_type_source").default("unknown"), // inferred | manual | unknown
+  classificationNote: text("classification_note"),
+
+  lockedFields: jsonb("locked_fields").$type<string[]>().default([]),
+  needsReview: boolean("needs_review").notNull().default(false),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

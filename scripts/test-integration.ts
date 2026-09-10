@@ -20,12 +20,14 @@ before(async () => {
   client = new PGlite();
   g.__db = drizzle(client, { schema });
 
+  // Apply every migration in order, exactly as the real database receives them.
   const dir = path.join(process.cwd(), "drizzle");
-  const file = readdirSync(dir).filter((f) => f.endsWith(".sql")).sort()[0];
-  const sqlText = readFileSync(path.join(dir, file), "utf8");
-  for (const stmt of sqlText.split("--> statement-breakpoint")) {
-    const s = stmt.trim();
-    if (s) await client.exec(s);
+  for (const file of readdirSync(dir).filter((f) => f.endsWith(".sql")).sort()) {
+    const sqlText = readFileSync(path.join(dir, file), "utf8");
+    for (const stmt of sqlText.split("--> statement-breakpoint")) {
+      const s = stmt.trim();
+      if (s) await client.exec(s);
+    }
   }
 });
 
@@ -249,4 +251,123 @@ test("receipts-basis excise refuses to guess when no purchase data is loaded", a
 
   assert.equal(result.taxComputed, 0);
   assert.ok(result.warnings.some((w) => w.includes("No purchase rows loaded")));
+});
+
+test("the product catalog builds itself from the transactions, prices included", async () => {
+  const { db } = await import("../src/db");
+  const { insertTransactions } = await import("../src/lib/ingest/persist");
+  const { refreshProductCatalog } = await import("../src/lib/products/catalog");
+  const { eq } = await import("drizzle-orm");
+
+  const [upload] = await db
+    .insert(schema.uploads)
+    .values({ filename: "products.csv", kind: "avalara" })
+    .returning({ id: schema.uploads.id });
+
+  const row = (over: Partial<Record<string, unknown>>) => ({
+    documentId: "D1", lineNo: "1", ref1: null, documentStatus: "Committed",
+    docType: "Sales Invoice", sign: 1, documentDate: "2026-07-05", period: "2026-07",
+    reportingDate: null, taxCalcDate: null, state: "OH", destCounty: "Franklin",
+    destCity: "Columbus", destZip: "43004", jurisdictionType: "State",
+    jurisdictionDescription: "OHIO", taxTypeDescription: "Sales", rate: 0.0575,
+    lineAmount: 0, discountAmount: 0, taxableAmount: 0, exemptAmount: 0, taxAmount: 0,
+    quantity: 0, itemCode: null, itemDescription: null, sourceFile: "products.csv",
+    ...over,
+  }) as Parameters<typeof insertTransactions>[1][number];
+
+  await insertTransactions(upload.id, [
+    // 4 units at $25 each = $100. Same line repeated for County - must NOT double.
+    row({ documentId: "D1", itemCode: "juice-1", itemDescription: "Naked 100 Lava Flow 60ML E-Liquid", quantity: 4, lineAmount: 100 }),
+    row({ documentId: "D1", itemCode: "juice-1", itemDescription: "Naked 100 Lava Flow 60ML E-Liquid", quantity: 4, lineAmount: 100, jurisdictionType: "County", jurisdictionDescription: "FRANKLIN" }),
+    // A second sale of the same SKU, 2 units at $25.
+    row({ documentId: "D2", itemCode: "JUICE-1", itemDescription: "Naked 100 Lava Flow 60ML E-Liquid", quantity: 2, lineAmount: 50, state: "OH" }),
+    // A pod pack - closed system, no volume in the name.
+    row({ documentId: "D3", itemCode: "pod-9", itemDescription: "Juul Pods Mango 4 Pack", quantity: 10, lineAmount: 200, state: "VA" }),
+    // A return of one juice unit nets the period down.
+    row({ documentId: "D4", itemCode: "JUICE-1", itemDescription: "Naked 100 Lava Flow 60ML E-Liquid", quantity: 1, lineAmount: 25, docType: "Return Invoice", sign: -1 }),
+  ]);
+
+  const result = await refreshProductCatalog();
+  const juiceRows = await db.select().from(schema.products).where(eq(schema.products.sku, "JUICE-1"));
+  assert.equal(juiceRows.length, 1, "juice-1 and JUICE-1 collapse to one SKU");
+  assert.ok(result.skusSeen >= 2, "every distinct item code in the transactions is catalogued");
+
+  const [juice] = await db.select().from(schema.products).where(eq(schema.products.sku, "JUICE-1"));
+  assert.equal(Number(juice.unitsSold), 5, "4 + 2 - 1, and the County row is not double counted");
+  assert.equal(Number(juice.revenue), 125, "100 + 50 - 25");
+  assert.equal(Number(juice.observedUnitPrice), 25, "price measured from the lines, not typed in");
+  assert.equal(juice.priceSource, "observed");
+  assert.equal(Number(juice.liquidMl), 60, "60ML read out of the product name");
+  assert.equal(juice.mlSource, "parsed");
+  assert.equal(juice.systemType, "OPEN");
+  assert.equal(juice.systemTypeSource, "inferred");
+  assert.equal(juice.wholesaleCost, null, "a sales export has no cost - left empty, not estimated");
+  assert.equal(juice.needsReview, true);
+  assert.deepEqual(juice.statesSold?.sort(), ["OH"]);
+
+  const [pod] = await db.select().from(schema.products).where(eq(schema.products.sku, "POD-9"));
+  assert.equal(Number(pod.observedUnitPrice), 20);
+  assert.equal(Number(pod.cartridgesPerUnit), 4, "4 Pack read from the name");
+  assert.equal(pod.systemType, "CLOSED");
+  assert.equal(pod.liquidMl, null, "pods rarely state a volume - not invented");
+});
+
+test("a human edit is never overwritten by a later upload", async () => {
+  const { db } = await import("../src/db");
+  const { eq } = await import("drizzle-orm");
+  const { buildProductUpdate } = await import("../src/lib/products/edit");
+  const { refreshProductCatalog } = await import("../src/lib/products/catalog");
+
+  const [before] = await db.select().from(schema.products).where(eq(schema.products.sku, "POD-9"));
+
+  const update = buildProductUpdate(before, {
+    description: before.description ?? "",
+    wholesaleCost: "8.50",
+    retailPrice: "",          // cleared - goes back to being derived
+    liquidMl: "2.4",
+    cartridgesPerUnit: "4",
+    systemType: "CLOSED",
+    containsNicotine: true,
+  });
+  await db.update(schema.products).set(update).where(eq(schema.products.id, before.id));
+
+  const [edited] = await db.select().from(schema.products).where(eq(schema.products.id, before.id));
+  assert.equal(Number(edited.wholesaleCost), 8.5);
+  assert.equal(edited.costSource, "manual");
+  assert.equal(Number(edited.liquidMl), 2.4);
+  assert.equal(edited.mlSource, "manual");
+  assert.ok(edited.lockedFields?.includes("wholesaleCost"));
+  assert.equal(edited.needsReview, false, "nothing outstanding once cost and mL are set");
+
+  // Rebuild: the derived fields refresh, the human's values survive.
+  await refreshProductCatalog();
+  const [after] = await db.select().from(schema.products).where(eq(schema.products.id, before.id));
+  assert.equal(Number(after.wholesaleCost), 8.5, "manual cost survived the rebuild");
+  assert.equal(Number(after.liquidMl), 2.4, "manual mL survived the rebuild");
+  assert.equal(Number(after.observedUnitPrice), 20, "observed evidence still refreshes");
+  assert.equal(after.priceSource, "observed", "retail was cleared, so it went back to being derived");
+});
+
+test("the purchase import fills wholesale cost automatically", async () => {
+  const { db } = await import("../src/db");
+  const { eq } = await import("drizzle-orm");
+  const { insertPurchases } = await import("../src/lib/ingest/persist");
+  const { refreshProductCatalog } = await import("../src/lib/products/catalog");
+
+  const [upload] = await db
+    .insert(schema.uploads)
+    .values({ filename: "purchases.csv", kind: "purchases" })
+    .returning({ id: schema.uploads.id });
+
+  // 20 units for $240 => $12.00 per unit.
+  await insertPurchases(upload.id, [
+    { period: "2026-07", state: "OH", sku: "JUICE-1", quantity: 12, wholesaleCost: 144 },
+    { period: "2026-07", state: "OH", sku: "juice-1", quantity: 8, wholesaleCost: 96 },
+  ]);
+
+  await refreshProductCatalog();
+  const [juice] = await db.select().from(schema.products).where(eq(schema.products.sku, "JUICE-1"));
+  assert.equal(Number(juice.wholesaleCost), 12, "weighted average unit cost from the purchases");
+  assert.equal(juice.costSource, "purchases");
+  assert.equal(juice.needsReview, false, "cost, mL and open/closed are all known now");
 });
