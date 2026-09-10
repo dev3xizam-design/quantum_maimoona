@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import Papa from "papaparse";
 import JSZip from "jszip";
+import type { Worksheet } from "exceljs";
 import {
   accumulateStats,
   buildHeaderMap,
@@ -117,6 +118,74 @@ export function AvalaraUploader() {
     });
   }
 
+  /**
+   * XLSX path. ExcelJS ships a browser build, so the workbook is read here and
+   * only normalized rows cross the wire - the file itself never gets uploaded.
+   */
+  async function parseXlsx(
+    file: File | Blob,
+    name: string,
+    uploadId: number,
+    stats: IngestStats,
+    seen: Set<string>,
+    counters: Progress,
+  ) {
+    setProgress({ ...counters, phase: `Reading ${name} (Excel files load fully before parsing)` });
+    const ExcelJS = (await import("exceljs")).default;
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(await (file as Blob).arrayBuffer());
+
+    const sheet = pickSheet(wb.worksheets);
+    if (!sheet) throw new Error(`${name}: no worksheet in this file has Avalara column headers.`);
+
+    const headerRowNumber = findHeaderRow(sheet);
+    const headers: string[] = [];
+    sheet.getRow(headerRowNumber).eachCell({ includeEmpty: true }, (cell, col) => {
+      headers[col - 1] = cellText(cell.value);
+    });
+
+    const map = buildHeaderMap(headers.filter(Boolean));
+    const missing = missingRequired(map);
+    if (missing.length) {
+      throw new Error(
+        `${name}: missing required column(s) ${missing.join(", ")}. Is this a SalesTaxDocumentLineDetail export?`,
+      );
+    }
+
+    let buffer: NormalizedRow[] = [];
+    const flush = async () => {
+      if (!buffer.length) return;
+      const batch = buffer;
+      buffer = [];
+      const r = await post("/api/ingest/rows", { uploadId, rows: batch });
+      counters.rows += batch.length;
+      counters.inserted += r.inserted;
+      counters.duplicates += r.duplicates;
+      setProgress({ ...counters, phase: "Parsing" });
+    };
+
+    for (let n = headerRowNumber + 1; n <= sheet.rowCount; n++) {
+      const excelRow = sheet.getRow(n);
+      const raw: Record<string, unknown> = {};
+      let hasValue = false;
+      excelRow.eachCell({ includeEmpty: false }, (cell, col) => {
+        const key = headers[col - 1];
+        if (!key) return;
+        const v = cellValue(cell.value);
+        if (v !== null && v !== "") hasValue = true;
+        raw[key] = v;
+      });
+      if (!hasValue) continue;
+
+      const row = normalizeRow(raw, map, name);
+      if (!row) continue;
+      accumulateStats(stats, row, seen);
+      buffer.push(row);
+      if (buffer.length >= BATCH) await flush();
+    }
+    await flush();
+  }
+
   async function handleFiles(files: FileList) {
     setBusy(true);
     setErrors([]);
@@ -135,21 +204,29 @@ export function AvalaraUploader() {
         if (file.name.toLowerCase().endsWith(".zip")) {
           const zip = await JSZip.loadAsync(file);
           const entries = Object.values(zip.files).filter(
-            (f) => !f.dir && /\.csv$/i.test(f.name),
+            (f) => !f.dir && /\.(csv|xlsx)$/i.test(f.name) && !f.name.startsWith("__MACOSX"),
           );
           if (!entries.length) {
-            throw new Error(`${file.name}: the ZIP contains no CSV files. Export as CSV from Avalara.`);
+            throw new Error(`${file.name}: the ZIP contains no .csv or .xlsx files.`);
           }
           for (const entry of entries) {
             const blob = await entry.async("blob");
-            await parseCsv(blob, entry.name, uploadId, runningStats, seen, counters);
+            if (/\.xlsx$/i.test(entry.name)) {
+              await parseXlsx(blob, entry.name, uploadId, runningStats, seen, counters);
+            } else {
+              await parseCsv(blob, entry.name, uploadId, runningStats, seen, counters);
+            }
           }
         } else if (file.name.toLowerCase().endsWith(".csv")) {
           await parseCsv(file, file.name, uploadId, runningStats, seen, counters);
-        } else {
+        } else if (file.name.toLowerCase().endsWith(".xlsx")) {
+          await parseXlsx(file, file.name, uploadId, runningStats, seen, counters);
+        } else if (file.name.toLowerCase().endsWith(".xls")) {
           throw new Error(
-            `${file.name}: only .csv and .zip are supported here. Re-export the Avalara report as CSV.`,
+            `${file.name}: the old .xls format cannot be read. Open it in Excel and Save As .xlsx or .csv.`,
           );
+        } else {
+          throw new Error(`${file.name}: upload a .csv, .xlsx or .zip export.`);
         }
       }
 
@@ -178,9 +255,9 @@ export function AvalaraUploader() {
     <section className="panel p-4">
       <h2 className="text-[13px] font-semibold">Avalara export</h2>
       <p className="mt-1 text-[12px] text-[var(--muted)]">
-        SalesTaxDocumentLineDetail export as CSV, or a ZIP of several. Parsed in your browser and
-        streamed in - large files are fine. Re-uploading a period is safe: duplicate rows are
-        ignored, never double-counted.
+        SalesTaxDocumentLineDetail export - .xlsx, .csv, or a ZIP of several. Parsed in your browser
+        and streamed in, so large files are fine and the file itself never leaves your machine.
+        Re-uploading a period is safe: duplicate rows are ignored, never double-counted.
       </p>
 
       <div className="mt-3 flex items-center gap-3">
@@ -188,7 +265,7 @@ export function AvalaraUploader() {
           ref={inputRef}
           type="file"
           multiple
-          accept=".csv,.zip"
+          accept=".csv,.xlsx,.zip"
           disabled={busy}
           onChange={(e) => e.target.files?.length && handleFiles(e.target.files)}
           className="text-[13px]"
@@ -274,4 +351,53 @@ function isMonthEnd(date: string) {
   const d = new Date(`${date}T00:00:00Z`);
   const next = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0));
   return d.getUTCDate() === next.getUTCDate();
+}
+
+/* ------------------------------------------------------------------ */
+/* XLSX helpers                                                        */
+/* ------------------------------------------------------------------ */
+
+/** ExcelJS cell values can be rich text, formula results, hyperlinks or dates. */
+function cellValue(v: unknown): string | number | null {
+  if (v === null || v === undefined) return null;
+  if (typeof v === "number" || typeof v === "string") return v;
+  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  const o = v as Record<string, unknown>;
+  if ("result" in o) return cellValue(o.result);
+  if ("text" in o) return String(o.text);
+  if ("richText" in o) return (o.richText as { text: string }[]).map((r) => r.text).join("");
+  if ("error" in o) return null;
+  return String(v);
+}
+
+function cellText(v: unknown): string {
+  const out = cellValue(v);
+  return out === null ? "" : String(out).trim();
+}
+
+function headerValuesAt(sheet: Worksheet, rowNumber: number): string[] {
+  const values: string[] = [];
+  sheet.getRow(rowNumber).eachCell({ includeEmpty: false }, (cell) => {
+    values.push(cellText(cell.value));
+  });
+  return values.filter(Boolean);
+}
+
+/** Avalara puts the headers on row 1, but tolerate a title block above them. */
+function findHeaderRow(sheet: Worksheet): number {
+  for (let n = 1; n <= Math.min(20, sheet.rowCount); n++) {
+    if (missingRequired(buildHeaderMap(headerValuesAt(sheet, n))).length === 0) return n;
+  }
+  return 1;
+}
+
+/** With several sheets, take the one whose headers actually match. */
+function pickSheet(sheets: Worksheet[]): Worksheet | null {
+  if (!sheets.length) return null;
+  for (const sheet of sheets) {
+    for (let n = 1; n <= Math.min(20, sheet.rowCount); n++) {
+      if (missingRequired(buildHeaderMap(headerValuesAt(sheet, n))).length === 0) return sheet;
+    }
+  }
+  return sheets.reduce((a, b) => (b.rowCount > a.rowCount ? b : a));
 }

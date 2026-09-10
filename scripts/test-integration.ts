@@ -371,3 +371,117 @@ test("the purchase import fills wholesale cost automatically", async () => {
   assert.equal(juice.costSource, "purchases");
   assert.equal(juice.needsReview, false, "cost, mL and open/closed are all known now");
 });
+
+test("the whole month computes in one pass, every state, and stores itself", async () => {
+  const { db } = await import("../src/db");
+  const { insertTransactions } = await import("../src/lib/ingest/persist");
+  const { computePeriodEverything } = await import("../src/lib/period");
+  const { eq, and } = await import("drizzle-orm");
+
+  const [upload] = await db
+    .insert(schema.uploads)
+    .values({ filename: "august.xlsx", kind: "avalara" })
+    .returning({ id: schema.uploads.id });
+
+  const line = (state: string, doc: string, amount: number, tax: number, jur = "State") => ({
+    documentId: doc, lineNo: "1", ref1: null, documentStatus: "Committed",
+    docType: "Sales Invoice", sign: 1, documentDate: "2026-08-14", period: "2026-08",
+    reportingDate: null, taxCalcDate: null, state, destCounty: "Main", destCity: "Metro",
+    destZip: "10001", jurisdictionType: jur, jurisdictionDescription: state,
+    taxTypeDescription: "Sales", rate: 0.06, lineAmount: amount, discountAmount: 0,
+    taxableAmount: amount, exemptAmount: 0, taxAmount: tax, quantity: 2,
+    itemCode: "JUICE-1", itemDescription: "Naked 100 Lava Flow 60ML E-Liquid",
+    sourceFile: "august.xlsx",
+  });
+
+  // Four states with August activity, one of them exploded across jurisdictions.
+  await insertTransactions(upload.id, [
+    line("FL", "A1", 1000, 60),
+    line("FL", "A1", 1000, 10, "County"),
+    line("TX", "A2", 2000, 125),
+    line("CT", "A3", 500, 31.75),   // newly added state
+    line("VT", "A4", 300, 18),      // newly added state
+  ]);
+
+  const comp = await computePeriodEverything("2026-08", { persist: true });
+
+  assert.ok(comp.bundles.length >= 50, `every registered state is covered (got ${comp.bundles.length})`);
+  assert.equal(comp.totals.statesWithActivity, 4);
+  assert.equal(comp.totals.gross, 3800, "1000 + 2000 + 500 + 300, County row not double counted");
+
+  const fl = comp.bundles.find((b) => b.state === "FL")!;
+  assert.equal(fl.sales?.gross, 1000);
+  assert.equal(fl.sales?.taxCollected, 70, "state 60 + county 10, summed across jurisdictions");
+  assert.equal(fl.hasActivity, true);
+
+  const ct = comp.bundles.find((b) => b.state === "CT")!;
+  assert.equal(ct.sales?.taxComputed, 31.75, "Connecticut 6.35% flat");
+
+  const quiet = comp.bundles.find((b) => b.state === "MS")!;
+  assert.equal(quiet.hasActivity, false, "a state with no sales is present but has nothing to file");
+
+  // Persisted, so the calendar and the returns list see it.
+  const [stored] = await db
+    .select()
+    .from(schema.filings)
+    .where(
+      and(
+        eq(schema.filings.state, "CT"),
+        eq(schema.filings.taxType, "sales"),
+        eq(schema.filings.period, "2026-08"),
+      ),
+    );
+  assert.ok(stored, "the CT return was stored for August");
+  assert.equal(Number(stored.taxComputed), 31.75);
+  assert.equal(stored.status, "ready");
+});
+
+test("the period workbook has a Summary, Action Items and one tab per state", async () => {
+  const { computePeriodEverything } = await import("../src/lib/period");
+  const { buildPeriodWorkbook, periodWorkbookFilename } = await import("../src/lib/excel/period-workbook");
+  const ExcelJS = (await import("exceljs")).default;
+
+  const comp = await computePeriodEverything("2026-08");
+  const buf = await buildPeriodWorkbook(comp, { company: "Maximum Vapor Inc.", fein: "82-1098441" });
+
+  assert.equal(periodWorkbookFilename("2026-08"), "All_States_2026-08.xlsx");
+
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.load(buf as unknown as ArrayBuffer);
+  const names = wb.worksheets.map((w) => w.name);
+
+  assert.equal(names[0], "Summary");
+  assert.equal(names[1], "Action Items");
+  for (const state of ["FL", "TX", "CT", "VT"]) {
+    assert.ok(names.includes(state), `${state} has its own tab`);
+  }
+  assert.equal(names.length, 6, "only states with activity get a tab by default");
+
+  // Every state with no sales can be included too.
+  const full = await buildPeriodWorkbook(comp, {
+    company: "Maximum Vapor Inc.", fein: "82-1098441", includeQuietStates: true,
+  });
+  const wbFull = new ExcelJS.Workbook();
+  await wbFull.xlsx.load(full as unknown as ArrayBuffer);
+  assert.ok(wbFull.worksheets.length >= 52, "a tab for all 50 states + DC, plus Summary and Actions");
+});
+
+test("all 50 states plus DC are registered, and the new ones carry a verify note", async () => {
+  const { SALES_SEED, PACT_STATES } = await import("../src/lib/seed-data");
+  const states = new Set(SALES_SEED.map((s) => s.state));
+
+  const ALL = [
+    "AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA","KS","KY","LA",
+    "ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK",
+    "OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY",
+  ];
+  for (const s of ALL) assert.ok(states.has(s), `${s} is missing from the sales config`);
+  assert.ok(states.has("DC"), "DC is missing");
+  assert.equal(PACT_STATES.length, 51, "PACT applies in every state plus DC");
+
+  // Anything not filed by hand must say so, loudly.
+  const unverified = SALES_SEED.filter((s) => s.notes.startsWith("VERIFY"));
+  assert.ok(unverified.length >= 18, "newly seeded states are flagged for verification");
+  const filedByHand = SALES_SEED.find((s) => s.state === "FL")!;
+  assert.ok(!filedByHand.notes.startsWith("VERIFY"), "states filed by hand are not flagged");
+});

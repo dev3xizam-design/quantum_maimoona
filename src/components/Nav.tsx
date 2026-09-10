@@ -3,6 +3,7 @@ import { logout } from "@/app/actions/auth";
 
 const LINKS = [
   { href: "/", label: "Calendar" },
+  { href: "/period", label: "Close month" },
   { href: "/returns", label: "Returns" },
   { href: "/products", label: "Products" },
   { href: "/upload", label: "Upload" },
