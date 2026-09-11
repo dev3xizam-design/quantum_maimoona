@@ -11,9 +11,10 @@ async function main() {
   const outDir = process.argv[3] ?? "/tmp";
   const started = Date.now();
 
-  const comp = await computePeriodEverything(month);
+  const persist = process.argv.includes("--persist");
+  const comp = await computePeriodEverything(month, { persist });
   const t = comp.totals;
-  console.log(`\ncomputed in ${((Date.now() - started) / 1000).toFixed(1)}s`);
+  console.log(`\ncomputed in ${((Date.now() - started) / 1000).toFixed(1)}s${persist ? " (stored)" : ""}`);
   console.log(`states with activity : ${t.statesWithActivity} of ${t.states}`);
   console.log(`gross                : ${fmtMoney(t.gross)}`);
   console.log(`taxable              : ${fmtMoney(t.taxable)}`);

@@ -147,6 +147,20 @@ export async function computeFiling(
 
 const s = (n: number) => n.toFixed(4);
 
+/**
+ * What gets stored on the filing row. The PACT result carries every shipment
+ * line - thousands of rows of customer PII - and there is no reason to keep a
+ * second copy of that in a jsonb column. Store the shape, not the bulk.
+ */
+export function persistableResult(result: AnyResult): Record<string, unknown> {
+  if (result.taxType === "pact") {
+    const { rows, ...rest } = result;
+    void rows;
+    return { ...rest, rowsOmitted: true };
+  }
+  return result as unknown as Record<string, unknown>;
+}
+
 /** Upsert the computed result onto the filing record (never clobbers "filed"). */
 export async function persistFiling(
   state: string,
@@ -166,7 +180,7 @@ export async function persistFiling(
     taxComputed: result.taxType === "pact" ? null : s(result.taxComputed),
     taxCollected: isSales ? s(result.taxCollected) : null,
     delta: isSales ? s(result.delta) : null,
-    result: result as unknown as Record<string, unknown>,
+    result: persistableResult(result),
     computedAt: new Date(),
     updatedAt: new Date(),
   };

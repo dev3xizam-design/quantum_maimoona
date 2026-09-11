@@ -1,5 +1,5 @@
 import "server-only";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql as dsql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   accounts,
@@ -18,8 +18,8 @@ import { filingPeriod, isoDate, monthsInPeriod, periodStart, type Frequency } fr
 import { computeSales, type JurisdictionCode, type SalesConfig } from "./engine/sales";
 import { computeExcise, type ExciseConfigRow, type ProductRow } from "./engine/excise";
 import { computePact } from "./engine/pact";
-import type { ExciseResult, PactResult, SalesResult, TxRow } from "./engine/types";
-import { persistFiling } from "./compute";
+import type { AnyResult, ExciseResult, PactResult, SalesResult, TxRow } from "./engine/types";
+import { persistableResult } from "./compute";
 
 /**
  * Computes every return for a calendar month in ONE pass.
@@ -327,13 +327,66 @@ export async function computePeriodEverything(
   }
 
   if (opts.persist) {
+    /**
+     * One upsert for the whole month. The previous version did a select plus a
+     * write per return - 126 round trips for a full month, which does not fit
+     * in a serverless invocation. The unique index on (state, tax_type, period)
+     * lets a single statement insert and update at once, and the CASE keeps a
+     * return that has already been filed from being quietly reopened.
+     */
+    const now = new Date();
+    const values: (typeof filings.$inferInsert)[] = [];
+
+    const add = (state: string, taxType: string, period: string, result: AnyResult) => {
+      const isSales = result.taxType === "sales";
+      values.push({
+        state,
+        taxType,
+        period,
+        status: "ready",
+        dueDate: result.dueDate,
+        gross: isSales ? result.gross.toFixed(4) : null,
+        exempt: isSales ? result.exempt.toFixed(4) : null,
+        taxable: isSales ? result.taxable.toFixed(4) : null,
+        taxComputed: result.taxType === "pact" ? null : result.taxComputed.toFixed(4),
+        taxCollected: isSales ? result.taxCollected.toFixed(4) : null,
+        delta: isSales ? result.delta.toFixed(4) : null,
+        result: persistableResult(result),
+        computedAt: now,
+        updatedAt: now,
+      });
+    };
+
     for (const b of bundles) {
       if (!b.hasActivity) continue;
-      if (b.sales && b.salesPeriod) await persistFiling(b.state, "sales", b.salesPeriod, b.sales);
-      if (b.excise && b.excisePeriod) await persistFiling(b.state, "excise", b.excisePeriod, b.excise);
+      if (b.sales && b.salesPeriod) add(b.state, "sales", b.salesPeriod, b.sales);
+      if (b.excise && b.excisePeriod) add(b.state, "excise", b.excisePeriod, b.excise);
       if (b.pact && b.pactPeriod && b.pact.shipmentCount > 0) {
-        await persistFiling(b.state, "pact", b.pactPeriod, b.pact);
+        add(b.state, "pact", b.pactPeriod, b.pact);
       }
+    }
+
+    const CHUNK = 40;
+    for (let i = 0; i < values.length; i += CHUNK) {
+      await db
+        .insert(filings)
+        .values(values.slice(i, i + CHUNK))
+        .onConflictDoUpdate({
+          target: [filings.state, filings.taxType, filings.period],
+          set: {
+            status: dsql`CASE WHEN ${filings.status} = 'filed' THEN 'filed' ELSE 'ready' END`,
+            dueDate: dsql`excluded.due_date`,
+            gross: dsql`excluded.gross`,
+            exempt: dsql`excluded.exempt`,
+            taxable: dsql`excluded.taxable`,
+            taxComputed: dsql`excluded.tax_computed`,
+            taxCollected: dsql`excluded.tax_collected`,
+            delta: dsql`excluded.delta`,
+            result: dsql`excluded.result`,
+            computedAt: dsql`excluded.computed_at`,
+            updatedAt: dsql`excluded.updated_at`,
+          },
+        });
     }
   }
 
