@@ -31,12 +31,30 @@ type Registration = {
   dueDay: number | null;
 };
 
-/** Every return the company is registered to file, sales + excise + PACT. */
-export async function listRegistrations(period: string): Promise<Registration[]> {
-  const salesish = await listActiveConfigs(period);
-  const excise = await db.select().from(exciseConfig).where(eq(exciseConfig.active, true));
+/**
+ * One snapshot of everything the calendar needs. Loaded ONCE and then reused
+ * for every month rendered - the previous version re-queried per month, which
+ * at 51 states over a 14-month backlog scan meant dozens of round trips and a
+ * page that timed out.
+ */
+export type CalendarData = {
+  registrations: Registration[];
+  activity: Set<string>; // `${state}|${month}`
+  filings: Map<string, typeof filings.$inferSelect>; // `${state}|${taxType}|${period}`
+};
 
-  const out: Registration[] = salesish
+export async function loadCalendarData(referenceMonth: string): Promise<CalendarData> {
+  const [salesish, excise, activityRows, filingRows] = await Promise.all([
+    listActiveConfigs(referenceMonth),
+    db.select().from(exciseConfig).where(eq(exciseConfig.active, true)),
+    db
+      .select({ state: transactions.state, period: transactions.period })
+      .from(transactions)
+      .groupBy(transactions.state, transactions.period),
+    db.select().from(filings),
+  ]);
+
+  const registrations: Registration[] = salesish
     .filter((c) => c.frequency !== "NONE")
     .map((c) => ({
       state: c.state,
@@ -48,8 +66,8 @@ export async function listRegistrations(period: string): Promise<Registration[]>
     }));
 
   for (const e of excise) {
-    if (out.some((r) => r.state === e.state && r.taxType === "excise")) continue;
-    out.push({
+    if (registrations.some((r) => r.state === e.state && r.taxType === "excise")) continue;
+    registrations.push({
       state: e.state,
       taxType: "excise",
       frequency: e.frequency,
@@ -58,45 +76,38 @@ export async function listRegistrations(period: string): Promise<Registration[]>
       dueDay: e.dueDay,
     });
   }
-  return out.sort((a, b) => a.state.localeCompare(b.state) || a.taxType.localeCompare(b.taxType));
+
+  registrations.sort(
+    (a, b) => a.state.localeCompare(b.state) || a.taxType.localeCompare(b.taxType),
+  );
+
+  return {
+    registrations,
+    activity: new Set(activityRows.map((a) => `${a.state}|${a.period}`)),
+    filings: new Map(filingRows.map((f) => [`${f.state}|${f.taxType}|${f.period}`, f])),
+  };
 }
 
 /**
  * The filing grid for one calendar month: rows = states, columns = tax types.
- * Frequency is resolved PER STATE PER TAX TYPE - the #1 lesson from doc 03
- * (Kansas sales is ANNUAL while its EC-2 excise is MONTHLY).
+ * Frequency is resolved PER STATE PER TAX TYPE - Kansas sales is ANNUAL while
+ * its EC-2 excise is MONTHLY.
  */
-export async function buildCalendar(month: string, asOf = new Date()): Promise<CalendarCell[]> {
-  const regs = await listRegistrations(month);
-
-  const activity = await db
-    .select({
-      state: transactions.state,
-      period: transactions.period,
-      rows: sql<number>`count(*)::int`,
-    })
-    .from(transactions)
-    .groupBy(transactions.state, transactions.period);
-  const activeSet = new Set(activity.map((a) => `${a.state}|${a.period}`));
-
-  const wanted = regs.map((r) => ({
-    ...r,
-    period: filingPeriod(month, r.frequency as Frequency),
-  }));
-
-  const periods = [...new Set(wanted.map((w) => w.period))];
-  const existing = periods.length
-    ? await db.select().from(filings).where(inArray(filings.period, periods))
-    : [];
-  const filingByKey = new Map(existing.map((f) => [`${f.state}|${f.taxType}|${f.period}`, f]));
-
+export function buildCalendarFrom(
+  data: CalendarData,
+  month: string,
+  asOf = new Date(),
+): CalendarCell[] {
   const today = isoDate(asOf);
 
-  return wanted.map((w) => {
-    const due = isoDate(dueDate(w.period, w.dueDay));
-    const f = filingByKey.get(`${w.state}|${w.taxType}|${w.period}`);
-    const hasActivity = monthsInPeriod(w.period).some((m) => activeSet.has(`${w.state}|${m}`));
-    const periodClosed = isoDate(periodEnd(w.period)) < today;
+  return data.registrations.map((reg) => {
+    const period = filingPeriod(month, reg.frequency as Frequency);
+    const due = isoDate(dueDate(period, reg.dueDay));
+    const f = data.filings.get(`${reg.state}|${reg.taxType}|${period}`);
+    const hasActivity = monthsInPeriod(period).some((m) =>
+      data.activity.has(`${reg.state}|${m}`),
+    );
+    const periodClosed = isoDate(periodEnd(period)) < today;
 
     let status: CalendarCell["status"];
     if (f?.status === "filed") status = "filed";
@@ -106,12 +117,12 @@ export async function buildCalendar(month: string, asOf = new Date()): Promise<C
     else status = "no_activity";
 
     return {
-      state: w.state,
-      taxType: w.taxType,
-      period: w.period,
-      frequency: w.frequency,
-      form: w.form,
-      portal: w.portal,
+      state: reg.state,
+      taxType: reg.taxType,
+      period,
+      frequency: reg.frequency,
+      form: reg.form,
+      portal: reg.portal,
       dueDate: due,
       status,
       hasActivity,
@@ -123,21 +134,26 @@ export async function buildCalendar(month: string, asOf = new Date()): Promise<C
   });
 }
 
-/**
- * Everything overdue across the last `lookbackMonths` - the Louisiana/Kentucky
- * "four months behind and nobody knew" problem.
- */
-export async function findBacklog(lookbackMonths = 14, asOf = new Date()): Promise<CalendarCell[]> {
-  const months: string[] = [];
-  for (let i = 1; i <= lookbackMonths; i++) {
-    const d = new Date(Date.UTC(asOf.getUTCFullYear(), asOf.getUTCMonth() - i, 1));
-    months.push(`${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`);
-  }
+export async function buildCalendar(month: string, asOf = new Date()): Promise<CalendarCell[]> {
+  return buildCalendarFrom(await loadCalendarData(month), month, asOf);
+}
 
+/**
+ * Everything overdue across the last `lookbackMonths` - the "four months behind
+ * and nobody knew" problem. Computed entirely from the snapshot.
+ */
+export function findBacklogFrom(
+  data: CalendarData,
+  lookbackMonths = 14,
+  asOf = new Date(),
+): CalendarCell[] {
   const seen = new Set<string>();
   const out: CalendarCell[] = [];
-  for (const m of months) {
-    for (const cell of await buildCalendar(m, asOf)) {
+
+  for (let i = 1; i <= lookbackMonths; i++) {
+    const d = new Date(Date.UTC(asOf.getUTCFullYear(), asOf.getUTCMonth() - i, 1));
+    const m = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+    for (const cell of buildCalendarFrom(data, m, asOf)) {
       const key = `${cell.state}|${cell.taxType}|${cell.period}`;
       if (seen.has(key)) continue;
       seen.add(key);
@@ -145,6 +161,15 @@ export async function findBacklog(lookbackMonths = 14, asOf = new Date()): Promi
     }
   }
   return out.sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+}
+
+export async function findBacklog(lookbackMonths = 14, asOf = new Date()): Promise<CalendarCell[]> {
+  const ref = `${asOf.getUTCFullYear()}-${String(asOf.getUTCMonth() + 1).padStart(2, "0")}`;
+  return findBacklogFrom(await loadCalendarData(ref), lookbackMonths, asOf);
+}
+
+export async function listRegistrations(period: string): Promise<Registration[]> {
+  return (await loadCalendarData(period)).registrations;
 }
 
 export async function getFiling(state: string, taxType: string, period: string) {
@@ -155,3 +180,5 @@ export async function getFiling(state: string, taxType: string, period: string) 
     .limit(1);
   return row ?? null;
 }
+
+export { sql, inArray };

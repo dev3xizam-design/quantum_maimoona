@@ -357,3 +357,81 @@ test("excise names the SKUs that are missing cost rather than silently under-tax
   assert.equal(r.dataGaps.cost[0].retail, 2500, "the affected revenue is quantified");
   assert.ok(r.warnings.some((w) => w.includes("WHOLESALE COST MISSING") && w.includes("NOCOST")));
 });
+
+/* ------------------------------------------------------------------ */
+/* Rate scale and jurisdiction-code matching                           */
+/* ------------------------------------------------------------------ */
+
+test("a percentage-format rate column is detected from the row's own arithmetic", async () => {
+  const { normalizeRate } = await import("../src/lib/ingest/avalara");
+
+  // Percentage file: the column says 4.5 and the row really charged 4.4963%.
+  assert.equal(normalizeRate(4.5, 850.48, 38.24), 0.045);
+  // The same file's sub-1% county rate - magnitude alone would miss this one.
+  assert.equal(normalizeRate(0.367, 380.58, 1.4), 0.00367);
+  assert.equal(normalizeRate(2.0, 74.99, 1.5), 0.02);
+
+  // Decimal file: the column already says 0.045 and the row agrees.
+  assert.equal(normalizeRate(0.045, 850.48, 38.24), 0.045);
+
+  // No arithmetic to check against: fall back to magnitude.
+  assert.equal(normalizeRate(6.25, 0, 0), 0.0625);
+  assert.equal(normalizeRate(0.0625, 0, 0), 0.0625);
+  assert.equal(normalizeRate(0, 100, 0), 0);
+});
+
+test("a 100x rate column cannot inflate the computed tax", () => {
+  // Same sale expressed both ways; the answer must not move.
+  const asPercent = [
+    line("INV1", "1", "State", { amount: 1000, taxable: 1000, tax: 45, rate: 4.5 }),
+    line("INV1", "1", "County", { amount: 1000, taxable: 1000, tax: 3.67, rate: 0.367 }),
+  ];
+  const config = {
+    ...baseConfig, state: "OK", stateRate: 0.045, hasLocal: true, allocation: "city_county" as const,
+  };
+  const r = computeSales(asPercent, { config, codes: [], period: "2026-08" });
+
+  assert.equal(r.taxCollected, 48.67);
+  assert.equal(r.taxComputed, 48.67, "state 45 computed at the official rate + county as collected");
+  assert.ok(r.taxComputed < r.gross, "the tax can never exceed the sale");
+});
+
+test("a city never inherits its county's filing code", () => {
+  const codes = [
+    { jurisdictionName: "Oklahoma City", jurisdictionType: "city", officialCode: "5521", pairedCode: "5588", pairedName: "Oklahoma", rate: null, rateIncludesState: false, avalaraAlias: "Edmond" },
+    { jurisdictionName: "Oklahoma", jurisdictionType: "county", officialCode: "5588", pairedCode: null, pairedName: null, rate: null, rateIncludesState: false, avalaraAlias: null },
+  ];
+  const rows = [
+    // Bethany is its own city, but it sits in Oklahoma County.
+    line("INV1", "1", "State", { amount: 100, taxable: 100, tax: 4.5 }, { destCity: "Bethany", destCounty: "Oklahoma" }),
+    line("INV1", "1", "City", { amount: 100, taxable: 100, tax: 4 }, { destCity: "Bethany", destCounty: "Oklahoma", jurisdictionDescription: "BETHANY" }),
+    // Edmond really is taxed as Oklahoma City - that mapping must still work.
+    line("INV2", "1", "State", { amount: 200, taxable: 200, tax: 9 }, { destCity: "Edmond", destCounty: "Oklahoma" }),
+    line("INV2", "1", "City", { amount: 200, taxable: 200, tax: 7.5 }, { destCity: "Edmond", destCounty: "Oklahoma", jurisdictionDescription: "EDMOND" }),
+  ];
+  const r = computeSales(rows, {
+    config: { ...baseConfig, state: "OK", stateRate: 0.045, hasLocal: true, allocation: "city_county" },
+    codes,
+    period: "2026-08",
+  });
+
+  const bethany = r.byJurisdiction.find((l) => l.name === "BETHANY")!;
+  assert.equal(bethany.code, null, "Bethany has no code loaded, so it must report as missing");
+  assert.equal(bethany.unmapped, true);
+
+  const edmond = r.byJurisdiction.find((l) => l.name === "EDMOND")!;
+  assert.equal(edmond.code, "5521", "the Edmond -> Oklahoma City alias still resolves");
+});
+
+test("with no official rate loaded, a local jurisdiction contributes what was collected", () => {
+  const rows = [
+    line("INV1", "1", "State", { amount: 1000, taxable: 1000, tax: 45 }),
+    line("INV1", "1", "County", { amount: 1000, taxable: 1000, tax: 12.34 }),
+  ];
+  const r = computeSales(rows, {
+    config: { ...baseConfig, state: "XX", stateRate: 0.045, hasLocal: true, allocation: "county" },
+    codes: [],
+    period: "2026-08",
+  });
+  assert.equal(r.taxComputed, 57.34, "45 from the official state rate + 12.34 actually collected");
+});

@@ -21,6 +21,14 @@ export default async function ReturnsPage() {
         </p>
       </div>
 
+      <div className="help">
+        <strong>Delta is the column to watch.</strong> It is what the state&rsquo;s official rate
+        assesses minus what Avalara actually collected. A positive number means you under-collected
+        and the difference comes out of margin — open the return and check the Avalara rate config
+        for that state. Click a state code to open its return, download its worksheet, or mark it
+        filed.
+      </div>
+
       <div className="panel overflow-hidden">
         <table className="grid">
           <thead>

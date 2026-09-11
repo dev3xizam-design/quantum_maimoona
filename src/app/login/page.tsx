@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { countUsers, getSession } from "@/lib/auth";
 import { LoginForm } from "./LoginForm";
+import { Logo } from "@/components/Logo";
 
 export const dynamic = "force-dynamic";
 
@@ -15,16 +16,21 @@ export default async function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center px-6">
+    <div
+      className="flex min-h-screen items-center justify-center px-6"
+      style={{
+        background:
+          "radial-gradient(1200px 600px at 50% -10%, #dcf5e5 0%, transparent 60%), var(--bg)",
+      }}
+    >
       <div className="w-full max-w-[380px]">
-        <div className="mb-6 flex items-center gap-2">
-          <span className="flex h-8 w-8 items-center justify-center rounded-md bg-[var(--accent)] text-sm font-bold text-white">
-            MV
-          </span>
-          <div>
-            <div className="text-[15px] font-semibold tracking-tight">Tax Automation</div>
-            <div className="text-[12px] text-[var(--muted)]">Maximum Vapor Inc.</div>
+        <div className="mb-7 flex flex-col items-center text-center">
+          <Logo size={54} />
+          <div className="mt-3 text-[20px] font-semibold tracking-tight">Quantum</div>
+          <div className="text-[11px] uppercase tracking-[0.16em] text-[var(--muted)]">
+            Tax Automation
           </div>
+          <div className="mt-1 text-[12px] text-[var(--muted)]">Maximum Vapor Inc.</div>
         </div>
 
         {dbError ? (

@@ -35,6 +35,13 @@ export default async function AuditPage() {
         </p>
       </div>
 
+      <div className="help">
+        <strong>This is the defence if a filing is ever questioned.</strong> Every rate, code and
+        frequency change is recorded with who made it, when, the old and new values, and the date it
+        took effect. Every generation run is recorded with what it covered. Nothing here can be
+        edited.
+      </div>
+
       <section className="panel overflow-hidden">
         <h2 className="border-b border-[var(--line)] px-4 py-3 text-[13px] font-semibold">
           Rule changes

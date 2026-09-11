@@ -30,6 +30,8 @@ export type JurisdictionLine = {
   code: string | null;
   pairedCode: string | null;
   pairedName: string | null;
+  /** Rate from OUR jurisdiction_codes table. Null when none is loaded. */
+  officialRate: number | null;
   gross: number;
   exempt: number;
   taxable: number;

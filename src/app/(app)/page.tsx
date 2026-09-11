@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { buildCalendar, findBacklog, type CalendarCell } from "@/lib/calendar";
+import { buildCalendarFrom, findBacklogFrom, loadCalendarData, type CalendarCell } from "@/lib/calendar";
 import { fmtMoney } from "@/lib/money";
 import { monthKey, periodLabel } from "@/lib/periods";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -61,7 +61,9 @@ export default async function CalendarPage({
   let backlog: CalendarCell[] = [];
   let error: string | null = null;
   try {
-    [cells, backlog] = await Promise.all([buildCalendar(month), findBacklog()]);
+    const data = await loadCalendarData(month);
+    cells = buildCalendarFrom(data, month);
+    backlog = findBacklogFrom(data);
   } catch (e) {
     error = e instanceof Error ? e.message : String(e);
   }
@@ -101,6 +103,15 @@ export default async function CalendarPage({
           <PeriodPicker month={month} />
           <RunPeriodButton month={month} />
         </div>
+      </div>
+
+      <div className="help">
+        <strong>Read this grid like a checklist.</strong> Rows are states, columns are the three
+        separate obligations — they are different returns on different accounts with different due
+        dates, and each state&rsquo;s frequency is resolved independently. A cell showing
+        &ldquo;no activity&rdquo; means that state had no sales this period, so there is nothing to
+        file. Press <em>Run this period</em> to compute everything that does have activity, or use{" "}
+        <strong>Close month</strong> to do every state at once and get the workbook.
       </div>
 
       {backlog.length > 0 && (

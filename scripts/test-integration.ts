@@ -436,7 +436,7 @@ test("the whole month computes in one pass, every state, and stores itself", asy
   assert.equal(stored.status, "ready");
 });
 
-test("the period workbook has a Summary, Action Items and one tab per state", async () => {
+test("the period workbook opens with Instructions, then Summary, Actions, and a tab per state", async () => {
   const { computePeriodEverything } = await import("../src/lib/period");
   const { buildPeriodWorkbook, periodWorkbookFilename } = await import("../src/lib/excel/period-workbook");
   const ExcelJS = (await import("exceljs")).default;
@@ -450,12 +450,20 @@ test("the period workbook has a Summary, Action Items and one tab per state", as
   await wb.xlsx.load(buf as unknown as ArrayBuffer);
   const names = wb.worksheets.map((w) => w.name);
 
-  assert.equal(names[0], "Summary");
-  assert.equal(names[1], "Action Items");
+  assert.deepEqual(names.slice(0, 3), ["Instructions", "Summary", "Action Items"]);
   for (const state of ["FL", "TX", "CT", "VT"]) {
     assert.ok(names.includes(state), `${state} has its own tab`);
   }
-  assert.equal(names.length, 6, "only states with activity get a tab by default");
+  assert.equal(names.length, 7, "three front tabs plus one per active state");
+
+  // The Instructions tab has to actually explain the workbook, not just exist.
+  const instructions = wb.getWorksheet("Instructions")!;
+  let text = "";
+  instructions.eachRow((row) => row.eachCell((c) => (text += ` ${c.value ?? ""}`)));
+  assert.match(text, /HOW TO USE THIS WORKBOOK/);
+  assert.match(text, /WHAT THE COLOURS MEAN/);
+  assert.match(text, /per state PER TAX TYPE/, "the frequency trap is called out");
+  assert.match(text, /PACT Act reports are due on the 10th/);
 
   // Every state with no sales can be included too.
   const full = await buildPeriodWorkbook(comp, {
@@ -463,7 +471,7 @@ test("the period workbook has a Summary, Action Items and one tab per state", as
   });
   const wbFull = new ExcelJS.Workbook();
   await wbFull.xlsx.load(full as unknown as ArrayBuffer);
-  assert.ok(wbFull.worksheets.length >= 52, "a tab for all 50 states + DC, plus Summary and Actions");
+  assert.ok(wbFull.worksheets.length >= 53, "a tab for all 50 states + DC, plus the three front tabs");
 });
 
 test("all 50 states plus DC are registered, and the new ones carry a verify note", async () => {

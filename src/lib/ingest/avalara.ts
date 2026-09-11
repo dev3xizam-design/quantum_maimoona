@@ -114,6 +114,34 @@ function toNumber(v: unknown): number {
   return negParen ? -n : n;
 }
 
+/**
+ * Avalara exports are inconsistent: some give a jurisdiction rate as a decimal
+ * (0.045) and some as a percentage (4.5) - and a percentage file still contains
+ * sub-1% rates like 0.367, so magnitude alone cannot tell them apart.
+ *
+ * The row's own arithmetic can: tax / taxable is the rate that was actually
+ * applied, whatever the column's format. Fall back to magnitude only when the
+ * row has no taxable amount to check against.
+ */
+export function normalizeRate(raw: number, taxable?: number, tax?: number): number {
+  if (!Number.isFinite(raw) || raw === 0) return 0;
+
+  if (
+    taxable !== undefined &&
+    tax !== undefined &&
+    Math.abs(taxable) > 0.005 &&
+    Math.abs(tax) > 0.0000001
+  ) {
+    const implied = Math.abs(tax / taxable);
+    const asDecimal = Math.abs(raw);
+    const asPercent = Math.abs(raw) / 100;
+    return Math.abs(asPercent - implied) <= Math.abs(asDecimal - implied) ? raw / 100 : raw;
+  }
+
+  // No arithmetic available: a sales-tax rate is never >= 1 as a decimal.
+  return Math.abs(raw) >= 1 ? raw / 100 : raw;
+}
+
 function toDate(v: unknown): string | null {
   if (v === null || v === undefined || v === "") return null;
   if (v instanceof Date) return v.toISOString().slice(0, 10);
@@ -149,6 +177,9 @@ export function normalizeRow(
   const docType = str(get("docType"));
   const sign = docType && /return/i.test(docType) ? -1 : 1;
 
+  const taxableAmount = toNumber(get("taxableAmount"));
+  const taxAmount = toNumber(get("taxAmount"));
+
   return {
     documentId: str(get("documentId")) ?? "",
     lineNo: str(get("lineNo")) ?? "1",
@@ -167,12 +198,12 @@ export function normalizeRow(
     jurisdictionType: str(get("jurisdictionType")),
     jurisdictionDescription: str(get("jurisdictionDescription")),
     taxTypeDescription: str(get("taxTypeDescription")),
-    rate: toNumber(get("rate")),
+    rate: normalizeRate(toNumber(get("rate")), taxableAmount, taxAmount),
     lineAmount: toNumber(get("lineAmount")),
     discountAmount: toNumber(get("discountAmount")),
-    taxableAmount: toNumber(get("taxableAmount")),
+    taxableAmount,
     exemptAmount: toNumber(get("exemptAmount")),
-    taxAmount: toNumber(get("taxAmount")),
+    taxAmount,
     quantity: toNumber(get("quantity")),
     itemCode: str(get("itemCode")),
     itemDescription: str(get("itemDescription")),

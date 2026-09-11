@@ -21,6 +21,8 @@ import {
   HILITE,
   WARN,
   OK_GREEN,
+  SUBTLE,
+  ACCENT,
   autoWidth,
   fill,
   headerRow,
@@ -86,6 +88,76 @@ function writeLines(ws: ExcelJS.Worksheet, lines: ReturnLine[]) {
 }
 
 /* ------------------------------------------------------------------ */
+
+function instructionsTab(wb: ExcelJS.Workbook, comp: PeriodComputation, company: string, fein: string) {
+  const ws = wb.addWorksheet("Instructions", { views: [{ showGridLines: false }] });
+  autoWidth(ws, [4, 30, 96]);
+
+  titleRow(ws, `QUANTUM TAX AUTOMATION - ${company} - ${periodLabel(comp.month)}`, 3);
+  const sub = ws.addRow(["", `FEIN ${fein}`, `Generated ${new Date().toISOString().slice(0, 16).replace("T", " ")} UTC`]);
+  sub.font = { color: { argb: "FF6B7F74" }, size: 10 };
+  spacer(ws);
+
+  sectionRow(ws, "HOW TO USE THIS WORKBOOK", 3);
+  const steps = [
+    "Start on the Summary tab. It lists every state that had sales this period, with the tax due for each and the date it is due.",
+    "Read the Action Items tab next. Anything that would make a return wrong is listed there, per state, with the exact SKUs or jurisdictions named. Resolve those before filing anything.",
+    "Then work state by state. Every state has its own tab, named by its two-letter code along the bottom of this workbook.",
+    "On a state's tab, the Return section lists that state's form lines IN THE ORDER ITS PORTAL ASKS FOR THEM. Type the yellow numbers into the portal, top to bottom.",
+    "The numbered steps at the bottom of each state tab tell you where to log in, which form to open, and which box each figure belongs in.",
+    "After you file, go back into Quantum and press Mark filed with the confirmation number. That is what keeps the calendar honest.",
+  ];
+  steps.forEach((text, i) => {
+    const row = ws.addRow([String(i + 1), "", text]);
+    row.getCell(1).font = { bold: true, color: { argb: `FF${ACCENT}` } };
+    row.getCell(3).alignment = { wrapText: true, vertical: "top" };
+    row.height = Math.max(16, Math.ceil(text.length / 95) * 15);
+  });
+  spacer(ws);
+
+  sectionRow(ws, "WHAT THE COLOURS MEAN", 3);
+  const legend: [string, string, string][] = [
+    [HILITE, "Yellow cell", "A number you type into the state portal."],
+    [WARN, "Red cell", "Something must be resolved before this return is filed. The reason is on the Action Items tab."],
+    [OK_GREEN, "Green cell", "A check that passed - for example Taxable + Exempt = Gross."],
+    [SUBTLE, "Grey note", "Context or a warning worth reading, but not a blocker."],
+  ];
+  for (const [colour, label, meaning] of legend) {
+    const row = ws.addRow(["", label, meaning]);
+    fill(row.getCell(2), `FF${colour}`);
+    row.getCell(2).font = { bold: true };
+    row.getCell(3).alignment = { wrapText: true };
+  }
+  spacer(ws);
+
+  sectionRow(ws, "THINGS THAT CATCH PEOPLE OUT", 3);
+  const gotchas = [
+    "Frequency is per state PER TAX TYPE. Kansas sales tax is ANNUAL while its EC-2 excise is MONTHLY. Each state tab shows the period each of its returns covers.",
+    "PACT Act reports are due on the 10th - ten days EARLIER than most sales tax returns, which are due on the 20th.",
+    "Vapor excise is a separate return on a separate account from sales tax, with a different base. It is never part of the sales tax return.",
+    "Kansas EC-2 taxes mL PURCHASED into inventory, not mL sold. It reads the purchase import and ignores sales data.",
+    "Some forms round to whole dollars (FL, IL, OK, TN). Each state's tab uses that state's own rounding - do not re-round.",
+    "Where a figure is missing rather than zero, Quantum says so instead of guessing. A blank wholesale cost means the excise shown is understated, not that the tax is nil.",
+  ];
+  for (const g of gotchas) noteRow(ws, g, "note", 3);
+  spacer(ws);
+
+  sectionRow(ws, "IMPORTANT", 3);
+  noteRow(
+    ws,
+    "This workbook PREPARES returns. A person files them. Every figure traces to transactions multiplied by a rate held in an editable table - nothing here is estimated. It is an accounting tool, not tax advice: a CPA should sign off on the rule set and spot-check filings.",
+    "warn",
+    3,
+  );
+  noteRow(
+    ws,
+    "Never record a state-portal password, PIN, card number or bank login in this workbook or in Quantum. Those belong in a password manager.",
+    "warn",
+    3,
+  );
+  return ws;
+}
+
 
 function summaryTab(wb: ExcelJS.Workbook, comp: PeriodComputation, company: string, fein: string) {
   const ws = wb.addWorksheet("Summary", { views: [{ state: "frozen", ySplit: 8, showGridLines: false }] });
@@ -336,6 +408,7 @@ export async function buildPeriodWorkbook(
   wb.creator = opts.company;
   wb.created = new Date();
 
+  instructionsTab(wb, comp, opts.company, opts.fein);
   summaryTab(wb, comp, opts.company, opts.fein);
   actionsTab(wb, comp);
 

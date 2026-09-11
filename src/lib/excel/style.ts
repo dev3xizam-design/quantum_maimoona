@@ -1,11 +1,14 @@
 import type { Worksheet, Row, Cell } from "exceljs";
 
-export const BRAND = "1F2937";
-export const ACCENT = "0F766E";
-export const HILITE = "FFF3B0"; // the yellow used on the manual recap sheets
-export const WARN = "FEE2E2";
-export const OK_GREEN = "DCFCE7";
-export const RULE = "E5E7EB";
+/* Quantum palette, sampled from the logo mark. */
+export const BRAND = "05301F";      // deep forest - title bars
+export const ACCENT = "0F5B33";     // section headings, table headers
+export const ACCENT_LIGHT = "1F9B4D";
+export const HILITE = "FFF3B0";     // yellow = a number you type into the portal
+export const WARN = "FDECEA";       // red = resolve before filing
+export const OK_GREEN = "DCF5E5";
+export const RULE = "DFE6E2";
+export const SUBTLE = "F3F7F4";
 
 export const MONEY_FMT = '#,##0.00;[Red]-#,##0.00';
 export const MONEY0_FMT = '#,##0;[Red]-#,##0';

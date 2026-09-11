@@ -13,6 +13,7 @@ import {
   transactions,
 } from "@/db/schema";
 import { num, round2 } from "./money";
+import { normalizeRate } from "./ingest/avalara";
 import { filingPeriod, isoDate, monthsInPeriod, periodStart, type Frequency } from "./periods";
 import { computeSales, type JurisdictionCode, type SalesConfig } from "./engine/sales";
 import { computeExcise, type ExciseConfigRow, type ProductRow } from "./engine/excise";
@@ -62,13 +63,21 @@ export type PeriodComputation = {
   };
 };
 
-/** Effective-dated resolution done in memory over one snapshot of the rules. */
+/**
+ * Effective-dated resolution done in memory over one snapshot of the rules.
+ *
+ * `state_tax_config` holds sales AND pact rows in the same table, so the
+ * taxType filter is not optional: without it a state's PACT row can win the
+ * sort and the sales return silently never computes.
+ */
 function resolver<T extends { state: string; effectiveFrom: string; effectiveTo: string | null }>(
   rows: T[],
+  where: (row: T) => boolean = () => true,
 ) {
+  const pool = rows.filter(where);
   return (state: string, period: string): T | null => {
     const at = isoDate(periodStart(period));
-    const candidates = rows
+    const candidates = pool
       .filter(
         (r) =>
           r.state === state &&
@@ -92,7 +101,8 @@ export async function computePeriodEverything(
     db.select().from(products),
   ]);
 
-  const resolveSales = resolver(salesCfgRows);
+  const resolveSales = resolver(salesCfgRows, (r) => r.taxType === "sales");
+  const resolvePact = resolver(salesCfgRows, (r) => r.taxType === "pact");
   const resolveExcise = resolver(exciseCfgRows);
 
   /* Which filing period does this month roll into, per state per tax type? */
@@ -102,15 +112,12 @@ export async function computePeriodEverything(
 
   for (const state of states) {
     const sales = resolveSales(state, month);
-    if (sales && sales.taxType === "sales" && sales.frequency !== "NONE") {
+    if (sales && sales.frequency !== "NONE") {
       const p = filingPeriod(month, sales.frequency as Frequency);
       periodFor.set(`${state}|sales`, p);
       monthsInPeriod(p).forEach((m) => neededMonths.add(m));
     }
-    const pact = salesCfgRows.find(
-      (r) => r.state === state && r.taxType === "pact" && r.effectiveFrom <= isoDate(periodStart(month)),
-    );
-    if (pact) periodFor.set(`${state}|pact`, month);
+    if (resolvePact(state, month)) periodFor.set(`${state}|pact`, month);
     const ex = resolveExcise(state, month);
     if (ex) {
       const p = filingPeriod(month, ex.frequency as Frequency);
@@ -145,7 +152,7 @@ export async function computePeriodEverything(
       destZip: r.destZip,
       jurisdictionType: r.jurisdictionType,
       jurisdictionDescription: r.jurisdictionDescription,
-      rate: num(r.rate),
+      rate: normalizeRate(num(r.rate), num(r.taxableAmount), num(r.taxAmount)),
       lineAmount: num(r.lineAmount),
       discountAmount: num(r.discountAmount),
       taxableAmount: num(r.taxableAmount),
@@ -273,7 +280,7 @@ export async function computePeriodEverything(
     }
 
     if (pactPeriod) {
-      const cfg = salesCfgRows.find((r) => r.state === state && r.taxType === "pact");
+      const cfg = resolvePact(state, pactPeriod);
       try {
         pact = computePact({
           state,

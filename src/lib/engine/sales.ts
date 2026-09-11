@@ -80,6 +80,7 @@ function emptyLine(partial: Partial<JurisdictionLine>): JurisdictionLine {
     code: null,
     pairedCode: null,
     pairedName: null,
+    officialRate: null,
     gross: 0,
     exempt: 0,
     taxable: 0,
@@ -195,7 +196,9 @@ export function computeSales(
     .sort((a, b) => b.taxable - a.taxable);
 
   /* ---- Collected vs computed --------------------------------------- */
-  const combinedLocal = byCounty.some((l) => l.code && l.rate > 0 && lineIncludesState(l, opts.codes));
+  const combinedLocal = byCounty.some(
+    (l) => l.code && l.officialRate !== null && l.officialRate > 0 && lineIncludesState(l, opts.codes),
+  );
   let taxComputed: number;
 
   if (config.allocation === "flat" || !config.hasLocal) {
@@ -203,13 +206,20 @@ export function computeSales(
   } else if (combinedLocal) {
     // WY / AZ style: the published county rate already includes the state rate.
     taxComputed = round2(
-      byCounty.reduce((sum, l) => sum + (l.rate > 0 ? l.taxable * l.rate : l.tax), 0),
+      byCounty.reduce(
+        (sum, l) => sum + (l.officialRate !== null && l.officialRate > 0 ? l.taxable * l.officialRate : l.tax),
+        0,
+      ),
     );
   } else {
     const stateComputed = taxable * config.stateRate;
     const localComputed = byJurisdiction
       .filter((l) => norm(l.type) !== "state")
-      .reduce((sum, l) => sum + (l.code && l.rate > 0 ? l.taxable * l.rate : l.tax), 0);
+      .reduce(
+        (sum, l) =>
+          sum + (l.officialRate !== null && l.officialRate > 0 ? l.taxable * l.officialRate : l.tax),
+        0,
+      );
     taxComputed = round2(stateComputed + localComputed);
   }
 
@@ -300,9 +310,12 @@ function finalizeLine(
 ): JurisdictionLine {
   const type = norm(line.type);
   const lookupType = type.includes("city") ? "city" : type.includes("county") ? "county" : type;
+  // Only a COUNTY line may fall back to the county name. A city line that
+  // borrowed its county's code would file, say, Bethany's sales under the
+  // Oklahoma City COPO code.
   const match =
     index.lookup(lookupType, line.name) ??
-    index.lookup(lookupType, line.county) ??
+    (lookupType === "county" ? index.lookup(lookupType, line.county) : null) ??
     index.lookup("local", line.name);
 
   line.gross = round2(line.gross);
@@ -314,12 +327,33 @@ function finalizeLine(
     line.code = match.officialCode;
     line.pairedCode = match.pairedCode;
     line.pairedName = match.pairedName;
-    if (match.rate !== null) line.rate = match.rate;
+    line.officialRate = match.rate;
     line.unmapped = false;
   } else {
+    line.officialRate = null;
     line.unmapped = lookupType === "county" || lookupType === "city";
-    if (line.rate === 0 && line.taxable !== 0) line.rate = round2(line.tax / line.taxable * 10000) / 10000;
   }
-  line.taxComputed = applyRounding(line.taxable * line.rate, config.rounding);
+
+  /**
+   * The displayed rate is derived from the row's own arithmetic wherever
+   * possible - that is exact and immune to whether the export wrote the rate
+   * column as a decimal or a percentage.
+   */
+  if (line.taxable !== 0 && line.tax !== 0) {
+    line.rate = Math.round((line.tax / line.taxable) * 1e6) / 1e6;
+  } else if (line.officialRate !== null) {
+    line.rate = line.officialRate;
+  }
+
+  /**
+   * The COMPUTED tax uses the official rate from our own editable table when we
+   * have one - that is the rate the state's form will assess. With no official
+   * rate loaded, the honest figure is what was actually collected; inventing
+   * one from the import would be a guess.
+   */
+  line.taxComputed =
+    line.officialRate !== null
+      ? applyRounding(line.taxable * line.officialRate, config.rounding)
+      : line.tax;
   return line;
 }

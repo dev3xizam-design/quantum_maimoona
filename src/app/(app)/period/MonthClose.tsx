@@ -40,24 +40,45 @@ export function MonthClose({ initialMonth }: { initialMonth: string }) {
 
   return (
     <div className="space-y-5">
-      <div className="panel flex flex-wrap items-end gap-4 p-4">
-        <div>
-          <label className="field" htmlFor="month">Month to close</label>
-          <select id="month" value={month} onChange={(e) => setMonth(e.target.value)} className="w-[200px]">
-            {months.map((m) => (
-              <option key={m} value={m}>{periodLabel(m)}</option>
-            ))}
-          </select>
+      <div className="panel p-5">
+        <div className="flex flex-wrap items-end gap-4">
+          <div>
+            <label className="field" htmlFor="month">Month to close</label>
+            <select id="month" value={month} onChange={(e) => setMonth(e.target.value)} className="w-[200px]">
+              {months.map((m) => (
+                <option key={m} value={m}>{periodLabel(m)}</option>
+              ))}
+            </select>
+          </div>
+          <button className="btn btn-primary" onClick={run} disabled={pending}>
+            {pending ? "Computing every state…" : "1 · Compute & store the whole month"}
+          </button>
         </div>
-        <button className="btn btn-primary" onClick={run} disabled={pending}>
-          {pending ? "Computing every state…" : "Compute & store the whole month"}
-        </button>
-        <a className="btn" href={`/api/period-workbook/${month}`}>
-          Download workbook — a tab per state
-        </a>
-        <a className="btn" href={`/api/period-workbook/${month}?all=1`}>
-          …including states with no sales
-        </a>
+
+        <div className="mt-4 border-t border-[var(--line)] pt-4">
+          <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-[var(--muted)]">
+            2 · Download
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <a className="btn" href={`/api/period-workbook/${month}`}>
+              All states — one workbook, a tab per state
+            </a>
+            <a className="btn" href={`/api/period-bundle/${month}`}>
+              Every state as its own workbook (ZIP)
+            </a>
+            <a className="btn btn-ghost" href={`/api/period-workbook/${month}?all=1`}>
+              Include states with no sales
+            </a>
+          </div>
+          <div className="help mt-3">
+            <strong>Which one?</strong> The single workbook is for reviewing the month — Summary,
+            Action Items, then a tab per state with that state&rsquo;s form lines in portal order.
+            The ZIP is for actually filing: one folder per state, and inside it each return as its
+            own workbook with the full five-tab set (Filing Sheet, Return, Jurisdiction Detail,
+            Reconciliation, Notes), plus a READ ME with the running order. Either download also
+            computes and stores the month, so you can go straight to the ZIP.
+          </div>
+        </div>
       </div>
 
       {result && !result.ok && (

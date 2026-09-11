@@ -3,6 +3,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { filings, products, purchases, shipments, transactions } from "@/db/schema";
 import { num } from "./money";
+import { normalizeRate } from "./ingest/avalara";
 import { monthsInPeriod } from "./periods";
 import { computeSales } from "./engine/sales";
 import { computeExcise } from "./engine/excise";
@@ -32,7 +33,7 @@ export async function fetchTransactions(state: string, period: string): Promise<
     destZip: r.destZip,
     jurisdictionType: r.jurisdictionType,
     jurisdictionDescription: r.jurisdictionDescription,
-    rate: num(r.rate),
+    rate: normalizeRate(num(r.rate), num(r.taxableAmount), num(r.taxAmount)),
     lineAmount: num(r.lineAmount),
     discountAmount: num(r.discountAmount),
     taxableAmount: num(r.taxableAmount),
