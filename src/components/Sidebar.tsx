@@ -7,7 +7,7 @@ import { Logo } from "./Logo";
 import {
   IconAudit,
   IconCalendar,
-  IconClose,
+  IconMonths,
   IconConfig,
   IconGuide,
   IconMenu,
@@ -24,8 +24,8 @@ const GROUPS: {
   {
     label: "Filing",
     links: [
+      { href: "/months", label: "Months", icon: IconMonths },
       { href: "/", label: "Calendar", icon: IconCalendar },
-      { href: "/period", label: "Close month", icon: IconClose },
       { href: "/returns", label: "Returns", icon: IconReturns },
     ],
   },

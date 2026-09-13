@@ -18,7 +18,7 @@ export default async function StateConfigPage() {
 
   return (
     <div className="panel overflow-hidden">
-      <table className="grid">
+      <table className="qtable">
         <thead>
           <tr>
             <th>State</th>

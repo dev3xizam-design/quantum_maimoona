@@ -114,7 +114,7 @@ export function ReturnsTable({ rows }: { rows: ReturnRow[] }) {
             Tax due in view: <strong className="tnum text-[var(--ink)]">{fmtMoney(total)}</strong>
           </span>
         </div>
-        <table className="grid">
+        <table className="qtable">
           <thead>
             <tr>
               <th>State</th>

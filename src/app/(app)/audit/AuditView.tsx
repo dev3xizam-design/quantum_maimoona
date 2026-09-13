@@ -48,7 +48,7 @@ export function AuditView({ changes, runs }: { changes: ChangeRow[]; runs: RunRo
 
       {tab === "changes" ? (
         <div className="panel overflow-hidden">
-          <table className="grid">
+          <table className="qtable">
             <thead>
               <tr>
                 <th>When</th>
@@ -83,7 +83,7 @@ export function AuditView({ changes, runs }: { changes: ChangeRow[]; runs: RunRo
         </div>
       ) : (
         <div className="panel overflow-hidden">
-          <table className="grid">
+          <table className="qtable">
             <thead>
               <tr>
                 <th>Started</th>

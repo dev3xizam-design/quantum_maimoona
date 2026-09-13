@@ -493,3 +493,54 @@ test("all 50 states plus DC are registered, and the new ones carry a verify note
   const filedByHand = SALES_SEED.find((s) => s.state === "FL")!;
   assert.ok(!filedByHand.notes.startsWith("VERIFY"), "states filed by hand are not flagged");
 });
+
+test("a month is stored as a thing in its own right, with a row per state", async () => {
+  const { db } = await import("../src/db");
+  const { eq } = await import("drizzle-orm");
+  const { computeAndStoreMonth, getMonthSnapshot, statesFromSnapshot, listMonths, setMonthStatus } =
+    await import("../src/lib/months");
+
+  const { totals } = await computeAndStoreMonth("2026-08", "tester@example.com");
+  assert.equal(totals.statesWithActivity, 4);
+
+  const snapshot = await getMonthSnapshot("2026-08");
+  assert.ok(snapshot, "the month itself is stored, not just its filings");
+  assert.equal(snapshot.month, "2026-08");
+  assert.equal(snapshot.status, "open");
+  assert.equal(snapshot.computedBy, "tester@example.com");
+  assert.equal(Number(snapshot.gross), 3800);
+  assert.equal(snapshot.statesWithActivity, 4);
+
+  // One entry per state, so the month page can tab through them.
+  const states = statesFromSnapshot(snapshot);
+  assert.ok(states.length >= 50, "every registered state is represented");
+  const fl = states.find((s) => s.state === "FL")!;
+  assert.equal(fl.hasActivity, true);
+  assert.equal(fl.gross, 1000);
+  assert.equal(fl.collected, 70);
+  assert.equal(fl.salesPeriod, "2026-08");
+  const quiet = states.find((s) => s.state === "MS")!;
+  assert.equal(quiet.hasActivity, false, "a quiet state still has a tab, marked as quiet");
+
+  // Recomputing overwrites in place rather than piling up rows.
+  await computeAndStoreMonth("2026-08", "tester@example.com");
+  const all = await db.select().from(schema.monthlySnapshots).where(eq(schema.monthlySnapshots.month, "2026-08"));
+  assert.equal(all.length, 1, "one snapshot per month");
+
+  const months = await listMonths();
+  const august = months.find((m) => m.month === "2026-08")!;
+  assert.equal(august.stored, true);
+  assert.ok(august.transactionRows > 0, "the row count comes from the transactions themselves");
+
+  // A month with transactions but no snapshot still shows up - that is the
+  // month you most need to see.
+  const july = months.find((m) => m.month === "2026-07");
+  assert.ok(july, "July has transactions from earlier tests and must be listed");
+  assert.equal(july.stored, false);
+  assert.equal(july.status, "open");
+
+  await setMonthStatus("2026-08", "closed", "tester@example.com");
+  const closed = await getMonthSnapshot("2026-08");
+  assert.equal(closed!.status, "closed");
+  assert.ok(closed!.closedAt, "closing records when");
+});

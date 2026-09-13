@@ -354,3 +354,38 @@ export const runLog = pgTable("run_log", {
   startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
   finishedAt: timestamp("finished_at", { withTimezone: true }),
 });
+
+/**
+ * A month, stored as a thing in its own right - not just a date filter over
+ * filings. Closing a month writes the snapshot: what every state owed, what was
+ * collected, what needed attention, and who computed it when. The month page
+ * reads this, so it stays stable even as later uploads change the underlying
+ * transactions.
+ */
+export const monthlySnapshots = pgTable(
+  "monthly_snapshots",
+  {
+    id: serial("id").primaryKey(),
+    month: text("month").notNull(), // YYYY-MM
+    status: text("status").notNull().default("open"), // open | closed
+    totals: jsonb("totals").$type<Record<string, unknown>>(),
+    states: jsonb("states").$type<Record<string, unknown>[]>(),
+    statesWithActivity: integer("states_with_activity").notNull().default(0),
+    gross: numeric("gross", { precision: 18, scale: 4 }).notNull().default("0"),
+    taxable: numeric("taxable", { precision: 18, scale: 4 }).notNull().default("0"),
+    salesTax: numeric("sales_tax", { precision: 18, scale: 4 }).notNull().default("0"),
+    exciseTax: numeric("excise_tax", { precision: 18, scale: 4 }).notNull().default("0"),
+    totalTax: numeric("total_tax", { precision: 18, scale: 4 }).notNull().default("0"),
+    collected: numeric("collected", { precision: 18, scale: 4 }).notNull().default("0"),
+    delta: numeric("delta", { precision: 18, scale: 4 }).notNull().default("0"),
+    pactShipments: integer("pact_shipments").notNull().default(0),
+    warnings: integer("warnings").notNull().default(0),
+    computedAt: timestamp("computed_at", { withTimezone: true }),
+    computedBy: text("computed_by"),
+    closedAt: timestamp("closed_at", { withTimezone: true }),
+    closedBy: text("closed_by"),
+    notes: text("notes"),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("monthly_snapshot_month_idx").on(t.month)],
+);

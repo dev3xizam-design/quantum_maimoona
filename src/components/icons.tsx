@@ -17,6 +17,14 @@ export const IconCalendar = () => (
   </svg>
 );
 
+export const IconMonths = () => (
+  <svg {...base}>
+    <rect x="3" y="4" width="18" height="17" rx="2" />
+    <path d="M3 9h18M8 2v4M16 2v4" />
+    <path d="M7.5 13h3M13.5 13h3M7.5 17h3M13.5 17h3" />
+  </svg>
+);
+
 export const IconClose = () => (
   <svg {...base}>
     <path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />

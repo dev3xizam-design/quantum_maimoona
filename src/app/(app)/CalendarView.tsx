@@ -116,7 +116,7 @@ export function CalendarView({
                 {onlyActive ? "Show all registered states" : "Only states with activity"}
               </button>
             </div>
-            <table className="grid">
+            <table className="qtable">
               <thead>
                 <tr>
                   <th>State</th>
@@ -171,7 +171,7 @@ export function CalendarView({
               looking back 14 months
             </span>
           </div>
-          <table className="grid">
+          <table className="qtable">
             <thead>
               <tr>
                 <th>State</th>

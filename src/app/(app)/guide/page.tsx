@@ -111,7 +111,7 @@ export default function GuidePage() {
       <Card>
         <H id="files">The four files it reads</H>
         <div className="overflow-x-auto">
-          <table className="grid">
+          <table className="qtable">
             <thead>
               <tr>
                 <th>File</th>
@@ -157,7 +157,7 @@ export default function GuidePage() {
       <Card>
         <H id="workbook">The workbook — what each tab is for</H>
         <div className="overflow-x-auto">
-          <table className="grid">
+          <table className="qtable">
             <thead>
               <tr>
                 <th>Tab</th>
@@ -252,7 +252,7 @@ export default function GuidePage() {
       <Card>
         <H id="trouble">If something looks wrong</H>
         <div className="overflow-x-auto">
-          <table className="grid">
+          <table className="qtable">
             <thead>
               <tr><th>Symptom</th><th>Almost always means</th></tr>
             </thead>

@@ -31,7 +31,7 @@ export default async function ExciseConfigPage() {
       </div>
 
       <div className="panel overflow-hidden">
-        <table className="grid">
+        <table className="qtable">
           <thead>
             <tr>
               <th>State</th>

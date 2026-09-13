@@ -121,7 +121,7 @@ export function ProductTable({ products }: { products: ProductView[] }) {
       {msg && <div className="callout callout-ok">{msg}</div>}
 
       <div className="panel overflow-x-auto">
-        <table className="grid">
+        <table className="qtable">
           <thead>
             <tr>
               <th style={{ width: 28 }}></th>

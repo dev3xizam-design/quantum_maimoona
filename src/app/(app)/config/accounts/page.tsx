@@ -63,7 +63,7 @@ export default async function AccountsPage() {
       </details>
 
       <div className="panel overflow-hidden">
-        <table className="grid">
+        <table className="qtable">
           <thead>
             <tr>
               <th>State</th>

@@ -328,7 +328,7 @@ export function AvalaraUploader() {
             </div>
           </div>
 
-          <table className="grid">
+          <table className="qtable">
             <thead>
               <tr>
                 <th>State</th>

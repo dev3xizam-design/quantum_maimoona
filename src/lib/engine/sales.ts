@@ -113,6 +113,13 @@ export function computeSales(
 
   /* Per-jurisdiction-row accumulation (tax: every row, never deduped). */
   const jurAcc = new Map<string, JurisdictionLine>();
+  /**
+   * Tax by DESTINATION county, taken from the rows directly. Rolling it up from
+   * the jurisdiction lines instead would dump the whole state-level tax into
+   * whichever county happened to appear first, inflating that county's rate.
+   */
+  const countyTax = new Map<string, number>();
+  const cityTax = new Map<string, number>();
   /* Destination rollups, built from deduped State rows only. */
   const countyAcc = new Map<string, JurisdictionLine>();
   const cityAcc = new Map<string, JurisdictionLine>();
@@ -138,6 +145,13 @@ export function computeSales(
     jLine.exempt += signedValue(r.exemptAmount, ret);
     if (r.rate > 0 && jLine.rate === 0) jLine.rate = r.rate;
     jurAcc.set(jKey, jLine);
+
+    const destCounty = r.destCounty ?? r.jurisdictionDescription ?? "UNKNOWN";
+    countyTax.set(norm(destCounty), (countyTax.get(norm(destCounty)) ?? 0) + rowTax);
+    if (r.destCity) {
+      const ck = `${norm(r.destCity)}|${norm(destCounty)}`;
+      cityTax.set(ck, (cityTax.get(ck) ?? 0) + rowTax);
+    }
 
     // ---- Sales figures: State rows only, deduped ------------------------
     if (!isState(r)) continue;
@@ -179,12 +193,9 @@ export function computeSales(
   stateTaxCollected = round2(stateTaxCollected);
   localTaxCollected = round2(localTaxCollected);
 
-  /* Attach tax collected per destination county from the jurisdiction rows. */
-  for (const line of jurAcc.values()) {
-    if (!line.county) continue;
-    const c = countyAcc.get(norm(line.county));
-    if (c) c.tax += line.tax;
-  }
+  /* Attach the destination tax totals collected above. */
+  for (const [key, line] of countyAcc) line.tax = round2(countyTax.get(key) ?? 0);
+  for (const [key, line] of cityAcc) line.tax = round2(cityTax.get(key) ?? 0);
 
   /* Resolve official filing codes. */
   const byJurisdiction = [...jurAcc.values()].map((l) => finalizeLine(l, index, config));

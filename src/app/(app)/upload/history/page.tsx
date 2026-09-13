@@ -17,7 +17,7 @@ export default async function UploadHistoryPage() {
   return (
     <div className="panel overflow-hidden">
       <div className="panel-head">Recent uploads</div>
-      <table className="grid">
+      <table className="qtable">
         <thead>
           <tr>
             <th>File</th>

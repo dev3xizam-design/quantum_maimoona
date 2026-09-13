@@ -128,7 +128,7 @@ export default async function ReturnPage({
                   <h2 className="border-b border-[var(--line)] px-4 py-3 text-[13px] font-semibold">
                     Jurisdiction allocation
                   </h2>
-                  <table className="grid">
+                  <table className="qtable">
                     <thead>
                       <tr>
                         <th>Jurisdiction</th>
@@ -186,7 +186,7 @@ export default async function ReturnPage({
                   <h2 className="border-b border-[var(--line)] px-4 py-3 text-[13px] font-semibold">
                     SKUs blocking this return
                   </h2>
-                  <table className="grid">
+                  <table className="qtable">
                     <thead>
                       <tr>
                         <th>SKU</th>
@@ -227,7 +227,7 @@ export default async function ReturnPage({
                 <h2 className="border-b border-[var(--line)] px-4 py-3 text-[13px] font-semibold">
                   Calculation
                 </h2>
-                <table className="grid">
+                <table className="qtable">
                   <thead>
                     <tr>
                       <th>Component</th>

@@ -11,6 +11,7 @@ import { computeSales, type SalesConfig } from "../src/lib/engine/sales";
 import { computeExcise } from "../src/lib/engine/excise";
 import type { TxRow } from "../src/lib/engine/types";
 import { dueDate, filingPeriod, isoDate, monthsInPeriod } from "../src/lib/periods";
+import { round2 } from "../src/lib/money";
 import { buildHeaderMap, missingRequired, normalizeRow, parseMlFromDescription } from "../src/lib/ingest/avalara";
 
 const baseConfig: SalesConfig = {
@@ -434,4 +435,33 @@ test("with no official rate loaded, a local jurisdiction contributes what was co
     period: "2026-08",
   });
   assert.equal(r.taxComputed, 57.34, "45 from the official state rate + 12.34 actually collected");
+});
+
+test("destination-county tax is not inflated by other destinations", () => {
+  // Two sales to different counties. Each county's rollup must carry only its
+  // own tax - including the state-level portion of its own sales.
+  const rows = [
+    line("INV1", "1", "State", { amount: 1000, taxable: 1000, tax: 45 }, { destCounty: "Alpha", destCity: "Alphaville" }),
+    line("INV1", "1", "County", { amount: 1000, taxable: 1000, tax: 10 }, { destCounty: "Alpha", destCity: "Alphaville" }),
+    line("INV2", "1", "State", { amount: 500, taxable: 500, tax: 22.5 }, { destCounty: "Beta", destCity: "Betaville" }),
+    line("INV2", "1", "County", { amount: 500, taxable: 500, tax: 20 }, { destCounty: "Beta", destCity: "Betaville" }),
+  ];
+  const r = computeSales(rows, {
+    config: { ...baseConfig, state: "OK", stateRate: 0.045, hasLocal: true, allocation: "county" },
+    codes: [],
+    period: "2026-08",
+  });
+
+  const alpha = r.byCounty.find((c) => c.name === "Alpha")!;
+  const beta = r.byCounty.find((c) => c.name === "Beta")!;
+
+  assert.equal(alpha.taxable, 1000);
+  assert.equal(alpha.tax, 55, "45 state + 10 county, for Alpha's sales only");
+  assert.equal(beta.taxable, 500);
+  assert.equal(beta.tax, 42.5, "22.5 state + 20 county");
+  assert.equal(round2(alpha.tax + beta.tax), r.taxCollected, "the rollup accounts for every cent");
+
+  // The effective rate shown must be that destination's real combined rate.
+  assert.equal(alpha.rate, 0.055);
+  assert.equal(beta.rate, 0.085);
 });
