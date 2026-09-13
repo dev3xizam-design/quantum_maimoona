@@ -1,6 +1,7 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
+import { FileDrop } from "@/components/FileDrop";
 import Papa from "papaparse";
 import JSZip from "jszip";
 import type { Worksheet } from "exceljs";
@@ -25,7 +26,6 @@ type Progress = { phase: string; rows: number; inserted: number; duplicates: num
  * request-body limit, and the validation report can be shown as it goes.
  */
 export function AvalaraUploader() {
-  const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<Progress | null>(null);
   const [stats, setStats] = useState<IngestStats | null>(null);
@@ -242,7 +242,6 @@ export function AvalaraUploader() {
       setErrors([e instanceof Error ? e.message : String(e)]);
     } finally {
       setBusy(false);
-      if (inputRef.current) inputRef.current.value = "";
     }
   }
 
@@ -251,60 +250,83 @@ export function AvalaraUploader() {
       ? stats.minDate.slice(8) !== "01" || !isMonthEnd(stats.maxDate)
       : false;
 
-  return (
-    <section className="panel p-4">
-      <h2 className="text-[13px] font-semibold">Avalara export</h2>
-      <p className="mt-1 text-[12px] text-[var(--muted)]">
-        SalesTaxDocumentLineDetail export - .xlsx, .csv, or a ZIP of several. Parsed in your browser
-        and streamed in, so large files are fine and the file itself never leaves your machine.
-        Re-uploading a period is safe: duplicate rows are ignored, never double-counted.
-      </p>
+  const pct =
+    progress && progress.rows > 0
+      ? Math.min(100, Math.round((progress.inserted / Math.max(progress.rows, 1)) * 100))
+      : 0;
 
-      <div className="mt-3 flex items-center gap-3">
-        <input
-          ref={inputRef}
-          type="file"
-          multiple
-          accept=".csv,.xlsx,.zip"
-          disabled={busy}
-          onChange={(e) => e.target.files?.length && handleFiles(e.target.files)}
-          className="text-[13px]"
-        />
+  return (
+    <div className="space-y-4">
+      <div className="panel p-5">
+        <h2 className="text-[14px] font-semibold">Avalara export</h2>
+        <p className="mt-1 text-[12.5px] text-[var(--muted)]">
+          The SalesTaxDocumentLineDetail report — <strong>.xlsx</strong>, <strong>.csv</strong>, or a
+          ZIP of several. It is parsed in your browser and streamed in, so the file never leaves your
+          machine and size is not a limit. Re-uploading a period is safe: duplicate rows are ignored,
+          never double-counted.
+        </p>
+
+        <div className="mt-4">
+          <FileDrop
+            accept=".csv,.xlsx,.zip"
+            multiple
+            disabled={busy}
+            buttonLabel={busy ? "Working…" : "Choose files"}
+            hint=".xlsx, .csv or .zip — several at once is fine"
+            onFiles={handleFiles}
+          />
+        </div>
+
+        {progress && (
+          <div className="mt-4">
+            <div className="mb-1.5 flex items-center justify-between text-[12px]">
+              <span className="font-semibold">{progress.phase}</span>
+              <span className="tnum text-[var(--muted)]">
+                {progress.rows.toLocaleString()} read · {progress.inserted.toLocaleString()} new ·{" "}
+                {progress.duplicates.toLocaleString()} duplicate
+              </span>
+            </div>
+            <div className="progressbar">
+              <span style={{ width: progress.phase === "Done" ? "100%" : `${Math.max(pct, 6)}%` }} />
+            </div>
+          </div>
+        )}
+
+        {errors.map((e, i) => (
+          <div key={i} className="callout callout-warn mt-4">{e}</div>
+        ))}
       </div>
 
-      {progress && (
-        <div className="mt-3 text-[12px] text-[var(--muted)] tnum">
-          {progress.phase}: {progress.rows.toLocaleString()} rows read ·{" "}
-          {progress.inserted.toLocaleString()} inserted · {progress.duplicates.toLocaleString()}{" "}
-          duplicates skipped
-        </div>
-      )}
-
-      {errors.map((e, i) => (
-        <div key={i} className="callout callout-warn mt-3">{e}</div>
-      ))}
-
       {stats && (
-        <div className="mt-4 space-y-3">
-          <div className="flex flex-wrap gap-4 text-[12px]">
-            <span><strong>{stats.rows.toLocaleString()}</strong> rows</span>
-            <span><strong>{stats.lines.toLocaleString()}</strong> unique document lines</span>
-            <span>Periods: <strong>{stats.periods.join(", ")}</strong></span>
-            <span>Dates: <strong>{stats.minDate} to {stats.maxDate}</strong></span>
+        <div className="panel overflow-hidden">
+          <div className="panel-head">
+            Validation report
+            <span className="ml-auto text-[11.5px] font-normal text-[var(--muted)]">
+              {stats.rows.toLocaleString()} rows · {stats.lines.toLocaleString()} unique lines ·{" "}
+              {stats.minDate} to {stats.maxDate}
+            </span>
           </div>
 
-          {partial && (
-            <div className="callout callout-warn">
-              This file does not start on the 1st or end on a month end - the period may be only
-              partially covered. Check before filing.
+          <div className="space-y-3 p-4">
+            {partial && (
+              <div className="callout callout-warn">
+                This file does not start on the 1st or end on a month end — the period may be only
+                partially covered. Check before filing.
+              </div>
+            )}
+            {stats.nonCommitted > 0 && (
+              <div className="callout callout-warn">
+                {stats.nonCommitted.toLocaleString()} row(s) are not in Committed status. Only
+                committed documents should be filed — re-export from Avalara with the Committed
+                filter.
+              </div>
+            )}
+            <div className="callout callout-note">
+              Every state below must show <strong>OK</strong>. That check —
+              Taxable + Exempt = Gross — is what catches a double-counted or partial upload before
+              it reaches a return.
             </div>
-          )}
-          {stats.nonCommitted > 0 && (
-            <div className="callout callout-warn">
-              {stats.nonCommitted.toLocaleString()} row(s) are not in Committed status. Only committed
-              documents should be filed - re-export from Avalara with the Committed filter.
-            </div>
-          )}
+          </div>
 
           <table className="grid">
             <thead>
@@ -324,7 +346,7 @@ export function AvalaraUploader() {
                 .map(([state, s]) => {
                   const ok = Math.abs(s.gross - (s.taxable + s.exempt)) <= 0.011;
                   return (
-                    <tr key={state}>
+                    <tr key={state} className={ok ? "" : "flagged"}>
                       <td className="font-semibold">{state}</td>
                       <td className="num">{s.rows.toLocaleString()}</td>
                       <td className="num">{s.gross.toFixed(2)}</td>
@@ -343,7 +365,7 @@ export function AvalaraUploader() {
           </table>
         </div>
       )}
-    </section>
+    </div>
   );
 }
 

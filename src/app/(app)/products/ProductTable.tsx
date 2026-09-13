@@ -38,6 +38,16 @@ export function ProductTable({ products }: { products: ProductView[] }) {
       return next;
     });
 
+  const rebuild = () =>
+    start(async () => {
+      const res = await rebuildCatalog();
+      setMsg(
+        res.ok
+          ? `Rebuilt from the transactions: ${res.result.skusSeen} SKUs, ${res.result.withPrice} priced, ${res.result.needsReview} still need something.`
+          : `Rebuild failed: ${res.error}`,
+      );
+    });
+
   const bulk = (systemType: "OPEN" | "CLOSED") =>
     start(async () => {
       const fd = new FormData();
@@ -50,42 +60,47 @@ export function ProductTable({ products }: { products: ProductView[] }) {
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-2">
-        {FILTERS.map((f) => {
-          const count = products.filter(f.match).length;
-          return (
-            <button
-              key={f.key}
-              onClick={() => setFilter(f.key)}
-              className={`btn btn-sm ${filter === f.key ? "btn-primary" : ""}`}
-            >
-              {f.label} <span className="opacity-60">{count}</span>
+      <div className="pagehead">
+        <div className="pagehead-row">
+          <div>
+            <h1 className="page-title">Products</h1>
+            <p className="page-sub mt-0.5">
+              Built automatically from every sale line in the Avalara export — item code, name,
+              quantity and amount. Prices are measured from what you actually charged.
+            </p>
+          </div>
+          <div className="pagehead-actions">
+            <input
+              type="text"
+              placeholder="Search SKU or name…"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              className="max-w-[240px]"
+            />
+            <button className="btn" disabled={pending} onClick={rebuild}>
+              {pending ? "Working…" : "Rebuild catalog"}
             </button>
-          );
-        })}
-        <input
-          type="text"
-          placeholder="Search SKU or name…"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          className="max-w-[240px]"
-        />
-        <button
-          className="btn ml-auto"
-          disabled={pending}
-          onClick={() =>
-            start(async () => {
-              const res = await rebuildCatalog();
-              setMsg(
-                res.ok
-                  ? `Rebuilt from the transactions: ${res.result.skusSeen} SKUs, ${res.result.withPrice} priced, ${res.result.needsReview} still need something.`
-                  : `Rebuild failed: ${res.error}`,
-              );
-            })
-          }
-        >
-          {pending ? "Working…" : "Rebuild catalog"}
-        </button>
+          </div>
+        </div>
+
+        <nav className="tabs">
+          {FILTERS.map((f) => {
+            const count = products.filter(f.match).length;
+            return (
+              <button
+                key={f.key}
+                onClick={() => setFilter(f.key)}
+                className="tab"
+                data-active={filter === f.key}
+              >
+                {f.label}
+                <span className="tab-count" data-tone={f.key !== "all" && count > 0 ? "warn" : undefined}>
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </nav>
       </div>
 
       {selected.size > 0 && (

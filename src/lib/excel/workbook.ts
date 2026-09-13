@@ -105,9 +105,7 @@ function filingSheet(wb: ExcelJS.Workbook, r: AnyResult, ctx: FormCtx, steps: st
         row.getCell(3).font = { bold: true, size: 12 };
         fill(row.getCell(3), `FF${HILITE}`);
       }
-      if (label.startsWith("Difference") && Math.abs(r.delta) >= 0.01) {
-        fill(row.getCell(3), `FF${WARN}`);
-      }
+      if (label.startsWith("Difference") && r.delta >= 0.01) fill(row.getCell(3), `FF${WARN}`);
     }
     spacer(ws);
   } else if (r.taxType === "excise") {
@@ -373,7 +371,8 @@ function reconciliationSheet(wb: ExcelJS.Workbook, r: AnyResult, sourceNote: str
       const row = ws.addRow([label, value, "", meaning]);
       row.getCell(2).numFmt = MONEY_FMT;
       row.getCell(4).alignment = { wrapText: true };
-      if (label.startsWith("Delta") && Math.abs(r.delta) >= 0.01) fill(row.getCell(2), `FF${WARN}`);
+      // Under-collection is the margin hit; over-collection is not an alarm.
+      if (label.startsWith("Delta") && r.delta >= 0.01) fill(row.getCell(2), `FF${WARN}`);
     }
     spacer(ws);
 

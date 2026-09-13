@@ -188,7 +188,7 @@ function summaryTab(wb: ExcelJS.Workbook, comp: PeriodComputation, company: stri
       r.font = { bold: true, size: 12 };
       fill(r.getCell(2), `FF${HILITE}`);
     }
-    if (label.startsWith("Under/over") && Math.abs(t.delta) >= 0.01) fill(r.getCell(2), `FF${WARN}`);
+    if (label.startsWith("Under/over") && t.delta >= 0.01) fill(r.getCell(2), `FF${WARN}`);
   }
   spacer(ws);
 
@@ -227,7 +227,7 @@ function summaryTab(wb: ExcelJS.Workbook, comp: PeriodComputation, company: stri
     ]);
     [3, 4, 5, 6, 7, 8, 9].forEach((i) => (row.getCell(i).numFmt = MONEY_FMT));
     row.getCell(1).font = { bold: true };
-    if (s && Math.abs(s.delta) >= 0.01) fill(row.getCell(8), `FF${WARN}`);
+    if (s && s.delta >= 0.01) fill(row.getCell(8), `FF${WARN}`);
     if (s && !s.reconciles) fill(row.getCell(1), `FF${WARN}`);
   }
 
@@ -313,7 +313,7 @@ function stateTab(wb: ExcelJS.Workbook, b: StateBundle, company: string, fein: s
     fill(rec.getCell(3), s.reconciles ? `FF${OK_GREEN}` : `FF${WARN}`);
     const d = ws.addRow(["", "Computed - collected", s.delta, "Positive means under-collected"]);
     d.getCell(3).numFmt = MONEY_FMT;
-    if (Math.abs(s.delta) >= 0.01) fill(d.getCell(3), `FF${WARN}`);
+    if (s.delta >= 0.01) fill(d.getCell(3), `FF${WARN}`);
     ws.addRow(["", "State rate applied", fmtPct(s.stateRate), ""]);
     ws.addRow(["", "Rounding", s.rounding === "whole_dollar" ? "Whole dollars" : "Cents", ""]);
     spacer(ws);

@@ -1,6 +1,7 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
+import { FileDrop } from "@/components/FileDrop";
 import Papa from "papaparse";
 
 type Kind = "products" | "purchases" | "shipments";
@@ -66,7 +67,6 @@ export function SimpleUploader({
   blurb: string;
   columns: string;
 }) {
-  const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [period, setPeriod] = useState("");
@@ -123,43 +123,53 @@ export function SimpleUploader({
       setMsg({ ok: false, text: e instanceof Error ? e.message : String(e) });
     } finally {
       setBusy(false);
-      if (inputRef.current) inputRef.current.value = "";
     }
   }
 
   return (
-    <section className="panel p-4">
-      <h2 className="text-[13px] font-semibold">{title}</h2>
-      <p className="mt-1 text-[12px] text-[var(--muted)]">{blurb}</p>
-      <p className="mt-1 font-mono text-[11px] text-[var(--muted)]">{columns}</p>
+    <div className="panel p-5">
+      <h2 className="text-[14px] font-semibold">{title}</h2>
+      <p className="mt-1 max-w-[70ch] text-[12.5px] text-[var(--muted)]">{blurb}</p>
+
+      <div className="mt-3">
+        <div className="field">Columns it looks for</div>
+        <code className="block rounded-lg border border-[var(--line)] bg-[#f7faf8] px-3 py-2 font-mono text-[11.5px] leading-relaxed text-[var(--ink-2)]">
+          {columns}
+        </code>
+        <p className="mt-1.5 text-[11.5px] text-[var(--muted)]">
+          Column names are matched loosely — <code>wholesale_cost</code>, <code>WholesaleCost</code>{" "}
+          and <code>Wholesale Cost</code> all work. Anything it cannot find is simply left empty.
+        </p>
+      </div>
 
       {kind !== "products" && (
-        <div className="mt-3 max-w-[200px]">
-          <label className="field" htmlFor={`${kind}-period`}>Period (if not a column)</label>
+        <div className="mt-4 max-w-[220px]">
+          <label className="field" htmlFor={`${kind}-period`}>
+            Period (only if the file has no period column)
+          </label>
           <input
             id={`${kind}-period`}
             type="text"
-            placeholder="2026-07"
+            placeholder="2026-08"
             value={period}
             onChange={(e) => setPeriod(e.target.value)}
           />
         </div>
       )}
 
-      <div className="mt-3">
-        <input
-          ref={inputRef}
-          type="file"
+      <div className="mt-4">
+        <FileDrop
           accept=".csv"
           disabled={busy}
-          onChange={(e) => e.target.files?.[0] && handle(e.target.files[0])}
-          className="text-[13px]"
+          buttonLabel={busy ? "Working…" : "Choose CSV"}
+          hint="A .csv file"
+          onFiles={(files) => handle(files[0])}
         />
       </div>
 
       {msg && (
-        <div className={`callout mt-3 ${msg.ok ? "callout-ok" : "callout-warn"}`}>{msg.text}</div>
+        <div className={`callout mt-4 ${msg.ok ? "callout-ok" : "callout-warn"}`}>{msg.text}</div>
       )}
-    </section>
+    </div>
   );
 }

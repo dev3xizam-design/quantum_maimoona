@@ -31,25 +31,28 @@ function Card({ children }: { children: React.ReactNode }) {
 export default function GuidePage() {
   return (
     <div className="space-y-5">
-      <div className="panel flex flex-wrap items-center gap-4 p-5">
-        <Logo size={44} />
-        <div>
-          <h1 className="page-title">How Quantum works</h1>
-          <p className="page-sub">
-            Read this once. Everything the system does is a formula or a lookup — there is no
-            estimation anywhere, and anything it cannot know it refuses to invent and tells you
-            about instead.
-          </p>
+      <div className="pagehead">
+        <div className="pagehead-row">
+          <div className="flex items-center gap-3">
+            <Logo size={38} />
+            <div>
+              <h1 className="page-title">How Quantum works</h1>
+              <p className="page-sub mt-0.5">
+                Read this once. Everything the system does is a formula or a lookup — there is no
+                estimation anywhere, and anything it cannot know it refuses to invent and tells you
+                about instead.
+              </p>
+            </div>
+          </div>
         </div>
+        <nav className="tabs">
+          {SECTIONS.map((s) => (
+            <a key={s.id} href={`#${s.id}`} className="tab">
+              {s.label}
+            </a>
+          ))}
+        </nav>
       </div>
-
-      <nav className="panel flex flex-wrap gap-1 p-2">
-        {SECTIONS.map((s) => (
-          <a key={s.id} href={`#${s.id}`} className="btn btn-sm btn-ghost">
-            {s.label}
-          </a>
-        ))}
-      </nav>
 
       <Card>
         <H id="overview">What this is</H>

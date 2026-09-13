@@ -21,6 +21,20 @@ type StateRow = {
   warnings: number;
 };
 
+const sheetIcon = (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="3" width="18" height="18" rx="2" />
+    <path d="M3 9h18M9 9v12" />
+  </svg>
+);
+
+const zipIcon = (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+    <path d="M12 11v5M9.5 13.5 12 16l2.5-2.5" />
+  </svg>
+);
+
 export function MonthClose({ initialMonth }: { initialMonth: string }) {
   const [month, setMonth] = useState(initialMonth);
   const [pending, start] = useTransition();
@@ -51,19 +65,21 @@ export function MonthClose({ initialMonth }: { initialMonth: string }) {
             </select>
           </div>
           <button className="btn btn-primary" onClick={run} disabled={pending}>
-            {pending ? "Computing every state…" : "1 · Compute & store the whole month"}
+            {pending ? "Computing every state…" : "Step 1 · Compute & store the whole month"}
           </button>
         </div>
 
-        <div className="mt-4 border-t border-[var(--line)] pt-4">
-          <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-[var(--muted)]">
-            2 · Download
+        <div className="mt-5 border-t border-[var(--line)] pt-4">
+          <div className="mb-2.5 text-[10.5px] font-bold uppercase tracking-[0.07em] text-[var(--muted)]">
+            Step 2 · Download
           </div>
           <div className="flex flex-wrap gap-2">
-            <a className="btn" href={`/api/period-workbook/${month}`}>
-              All states — one workbook, a tab per state
+            <a className="btn btn-primary" href={`/api/period-workbook/${month}`}>
+              {sheetIcon}
+              All states — one workbook
             </a>
             <a className="btn" href={`/api/period-bundle/${month}`}>
+              {zipIcon}
               Every state as its own workbook (ZIP)
             </a>
             <a className="btn btn-ghost" href={`/api/period-workbook/${month}?all=1`}>
@@ -71,12 +87,11 @@ export function MonthClose({ initialMonth }: { initialMonth: string }) {
             </a>
           </div>
           <div className="help mt-3">
-            <strong>Which one?</strong> The single workbook is for reviewing the month — Summary,
-            Action Items, then a tab per state with that state&rsquo;s form lines in portal order.
-            The ZIP is for actually filing: one folder per state, and inside it each return as its
-            own workbook with the full five-tab set (Filing Sheet, Return, Jurisdiction Detail,
-            Reconciliation, Notes), plus a READ ME with the running order. Either download also
-            computes and stores the month, so you can go straight to the ZIP.
+            <strong>Which one?</strong> The single workbook is for reviewing the month — Instructions,
+            Summary, Action Items, then a tab per state with that state&rsquo;s form lines in portal
+            order. The ZIP is for actually filing: one folder per state, each return as its own
+            workbook with the full five-tab set, plus a READ ME with the running order. Either
+            download also computes and stores the month, so you can go straight to the ZIP.
           </div>
         </div>
       </div>

@@ -111,9 +111,15 @@ export default async function ReturnPage({
                 <Row label="Tax due" value={fmtMoney(result.taxComputed)} strong />
                 <Row label="Tax collected by Avalara" value={fmtMoney(result.taxCollected)} />
                 <Row
-                  label="Delta (computed - collected)"
+                  label={
+                    result.delta >= 0.01
+                      ? "Under-collected (comes out of margin)"
+                      : result.delta <= -0.01
+                        ? "Over-collected"
+                        : "Delta (computed − collected)"
+                  }
                   value={fmtMoney(result.delta)}
-                  tone={Math.abs(result.delta) >= 0.01 ? "warn" : undefined}
+                  tone={result.delta >= 0.01 ? "warn" : undefined}
                 />
               </section>
 
