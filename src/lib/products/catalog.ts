@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { products } from "@/db/schema";
 import { num, round2 } from "../money";
 import { classifyProduct, classificationSummary } from "./classify";
+import { medusaEnrichmentBySku } from "../medusa/sync";
 
 /**
  * Builds the product master out of the Avalara transactions that are already
@@ -125,9 +126,10 @@ export type CatalogRefreshResult = {
 const CHUNK = 200;
 
 export async function refreshProductCatalog(): Promise<CatalogRefreshResult> {
-  const [aggregates, costs, existingRows] = await Promise.all([
+  const [aggregates, costs, medusa, existingRows] = await Promise.all([
     aggregateFromTransactions(),
     unitCostsFromPurchases(),
+    medusaEnrichmentBySku().catch(() => new Map()),
     db.select().from(products),
   ]);
 
@@ -166,8 +168,12 @@ export async function refreshProductCatalog(): Promise<CatalogRefreshResult> {
     const retailPrice = locked.has("retailPrice") ? num(prior?.retailPrice) : observedUnitPrice;
     const priceSource = locked.has("retailPrice") ? "manual" : observedUnitPrice !== null ? "observed" : "unknown";
 
-    /* Wholesale cost: purchases if uploaded, otherwise left empty on purpose. */
+    /*
+     * Cost, in order of authority: what a person typed, then what was actually
+     * paid on a purchase order, then what Medusa holds. Never a guess.
+     */
     const observedUnitCost = costs.get(agg.sku) ?? null;
+    const fromMedusa = medusa.get(agg.sku) ?? null;
     let wholesaleCost: number | null;
     let costSource: string;
     if (locked.has("wholesaleCost")) {
@@ -176,21 +182,47 @@ export async function refreshProductCatalog(): Promise<CatalogRefreshResult> {
     } else if (observedUnitCost !== null) {
       wholesaleCost = observedUnitCost;
       costSource = "purchases";
+    } else if (fromMedusa?.cost != null) {
+      wholesaleCost = fromMedusa.cost;
+      costSource = "medusa";
     } else {
       wholesaleCost = null;
       costSource = "unknown";
     }
 
-    /* Volume: only what the name actually states. */
-    const liquidMl = locked.has("liquidMl") ? (prior?.liquidMl ? num(prior.liquidMl) : null) : c.liquidMl;
-    const mlSource = locked.has("liquidMl") ? "manual" : c.liquidMl !== null ? "parsed" : "unknown";
+    /* Volume: what a person set, then Medusa, then what the name states. */
+    let liquidMl: number | null;
+    let mlSource: string;
+    if (locked.has("liquidMl")) {
+      liquidMl = prior?.liquidMl ? num(prior.liquidMl) : null;
+      mlSource = "manual";
+    } else if (fromMedusa?.ml != null) {
+      liquidMl = fromMedusa.ml;
+      mlSource = "medusa";
+    } else if (c.liquidMl !== null) {
+      liquidMl = c.liquidMl;
+      mlSource = "parsed";
+    } else {
+      liquidMl = null;
+      mlSource = "unknown";
+    }
 
     const cartridgesPerUnit = locked.has("cartridgesPerUnit")
       ? (prior?.cartridgesPerUnit ? num(prior.cartridgesPerUnit) : null)
       : (c.cartridgesPerUnit ?? 1);
 
-    const systemType = locked.has("systemType") ? (prior?.systemType ?? null) : c.systemType;
-    const systemTypeSource = locked.has("systemType") ? "manual" : c.systemType ? "inferred" : "unknown";
+    let systemType: string | null;
+    let systemTypeSource: string;
+    if (locked.has("systemType")) {
+      systemType = prior?.systemType ?? null;
+      systemTypeSource = "manual";
+    } else if (fromMedusa?.systemType) {
+      systemType = fromMedusa.systemType;
+      systemTypeSource = "medusa";
+    } else {
+      systemType = c.systemType;
+      systemTypeSource = c.systemType ? "inferred" : "unknown";
+    }
 
     const containsNicotine = locked.has("containsNicotine")
       ? (prior?.containsNicotine ?? true)

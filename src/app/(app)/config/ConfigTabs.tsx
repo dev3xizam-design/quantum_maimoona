@@ -9,6 +9,7 @@ const TABS = [
   { href: "/config/jurisdictions", label: "Jurisdiction codes" },
   { href: "/config/accounts", label: "Accounts" },
   { href: "/config/nexus", label: "Nexus thresholds" },
+  { href: "/config/medusa", label: "Medusa" },
 ];
 
 export function ConfigTabs() {

@@ -612,3 +612,22 @@ test("shipping lines stop demanding excise data once reclassified", async () => 
   assert.equal(shipping.containsNicotine, false);
   assert.equal(shipping.needsReview, false, "a shipping charge has no wholesale cost or mL to find");
 });
+test("a Medusa secret survives a round trip and is never stored in the clear", async () => {
+  process.env.AUTH_SECRET = "test-secret-that-is-long-enough-for-hs256";
+  const { encryptSecret, decryptSecret, last4 } = await import("../src/lib/crypto");
+
+  const secret = "sk_live_abcdef1234567890";
+  const cipher = encryptSecret(secret);
+
+  assert.notEqual(cipher, secret);
+  assert.equal(cipher.includes(secret), false, "the plaintext must not appear in the stored value");
+  assert.equal(decryptSecret(cipher), secret);
+  assert.equal(last4(secret), "7890");
+
+  // Each encryption uses a fresh IV, so the same secret never looks the same.
+  assert.notEqual(encryptSecret(secret), cipher);
+
+  // A tampered payload fails rather than returning garbage.
+  assert.throws(() => decryptSecret(cipher.replace(/.$/, "A")));
+});
+

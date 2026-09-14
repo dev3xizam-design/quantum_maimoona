@@ -398,3 +398,71 @@ export const monthlySnapshots = pgTable(
   },
   (t) => [uniqueIndex("monthly_snapshot_month_idx").on(t.month)],
 );
+
+/* ------------------------------------------------------------------ */
+/* Integrations                                                        */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Credentials for a system Quantum talks to on your behalf - currently Medusa.
+ *
+ * This is NOT the same as a state-portal password, which must never be stored
+ * anywhere: this is an integration key the app needs to hold in order to work
+ * at all. It is encrypted at rest with a key derived from AUTH_SECRET, never
+ * returned to the browser, and never written to a log. Only the last four
+ * characters are shown, so you can tell which key is loaded.
+ */
+export const integrations = pgTable(
+  "integrations",
+  {
+    id: serial("id").primaryKey(),
+    provider: text("provider").notNull(), // medusa
+    baseUrl: text("base_url").notNull(),
+    secretCipher: text("secret_cipher"),
+    secretLast4: text("secret_last4"),
+    authScheme: text("auth_scheme"), // basic-colon | basic-raw | bearer
+    status: text("status").notNull().default("unconfigured"), // unconfigured | ok | error
+    lastError: text("last_error"),
+    lastTestedAt: timestamp("last_tested_at", { withTimezone: true }),
+    lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),
+    stats: jsonb("stats").$type<Record<string, unknown>>(),
+    updatedBy: text("updated_by"),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("integration_provider_idx").on(t.provider)],
+);
+
+/**
+ * A mirror of the Medusa catalog. Kept separate from `products` on purpose:
+ * `products` is what the tax engines read and is keyed on the item code Avalara
+ * reports, while this is whatever Medusa happens to hold. Matching the two is
+ * an explicit, reviewable step rather than a silent merge.
+ */
+export const medusaProducts = pgTable(
+  "medusa_products",
+  {
+    id: serial("id").primaryKey(),
+    variantId: text("variant_id").notNull(),
+    productId: text("product_id"),
+    productTitle: text("product_title"),
+    variantTitle: text("variant_title"),
+    sku: text("sku"),
+    barcode: text("barcode"),
+    ean: text("ean"),
+    upc: text("upc"),
+    wholesaleCost: numeric("wholesale_cost", { precision: 18, scale: 4 }),
+    liquidMl: numeric("liquid_ml", { precision: 12, scale: 4 }),
+    systemType: text("system_type"),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>(),
+    /** The `products.sku` this variant was matched to, and how. */
+    matchedSku: text("matched_sku"),
+    matchMethod: text("match_method"), // barcode | upc | ean | sku | none
+    syncedAt: timestamp("synced_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("medusa_variant_idx").on(t.variantId),
+    index("medusa_barcode_idx").on(t.barcode),
+    index("medusa_sku_idx").on(t.sku),
+    index("medusa_matched_idx").on(t.matchedSku),
+  ],
+);

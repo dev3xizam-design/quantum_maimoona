@@ -513,3 +513,67 @@ test("shipping, fees and gift cards are not treated as merchandise", async () =>
   assert.equal(real.containsNicotine, true);
   assert.equal(real.systemType, "OPEN");
 });
+
+/* ------------------------------------------------------------------ */
+/* Medusa integration                                                  */
+/* ------------------------------------------------------------------ */
+
+test("the backend URL is normalised, including a pasted dashboard link", async () => {
+  const { normalizeBaseUrl } = await import("../src/lib/medusa/match");
+
+  assert.equal(normalizeBaseUrl("mia-tyson-vape-deals.medusajs.app"), "https://mia-tyson-vape-deals.medusajs.app");
+  assert.equal(normalizeBaseUrl("https://shop.example.com/"), "https://shop.example.com");
+  assert.equal(
+    normalizeBaseUrl("https://mia-tyson-vape-deals.medusajs.app/app/products"),
+    "https://mia-tyson-vape-deals.medusajs.app",
+    "the admin dashboard path is stripped - the API is at the root",
+  );
+  assert.throws(() => normalizeBaseUrl("   "));
+});
+
+test("Medusa secret keys authenticate with Basic, not Bearer", async () => {
+  const { authHeader } = await import("../src/lib/medusa/match");
+  const key = "sk_test_123";
+
+  assert.equal(authHeader(key, "basic-colon"), `Basic ${Buffer.from(`${key}:`).toString("base64")}`);
+  assert.equal(authHeader(key, "basic-raw"), `Basic ${Buffer.from(key).toString("base64")}`);
+  assert.equal(authHeader(key, "bearer"), `Bearer ${key}`);
+  assert.ok(authHeader(key, "basic-colon").startsWith("Basic "));
+});
+
+test("barcodes match regardless of how they were typed", async () => {
+  const { normalizeCode } = await import("../src/lib/medusa/match");
+
+  assert.equal(normalizeCode("6573457375317"), "6573457375317");
+  assert.equal(normalizeCode(" 657345-7375317 "), "6573457375317", "spaces and dashes are noise");
+  assert.equal(normalizeCode("sku-100000"), "SKU100000");
+  assert.equal(normalizeCode(""), null);
+  assert.equal(normalizeCode(null), null);
+});
+
+test("cost, mL and open/closed are read out of Medusa metadata", async () => {
+  const { readVariantExtras } = await import("../src/lib/medusa/match");
+
+  const a = readVariantExtras(
+    { id: "v1", metadata: { wholesale_cost: "12.50", liquid_ml: "30", system_type: "Open System" } },
+    null,
+  );
+  assert.equal(a.cost, 12.5);
+  assert.equal(a.ml, 30);
+  assert.equal(a.systemType, "OPEN");
+
+  // Naming varies; matching is loose. Variant metadata wins over product.
+  const b = readVariantExtras(
+    { id: "v2", metadata: { costPrice: "$8.00" } },
+    { "Volume ML": 60, deviceType: "closed pod" },
+  );
+  assert.equal(b.cost, 8);
+  assert.equal(b.ml, 60);
+  assert.equal(b.systemType, "CLOSED");
+
+  // Nothing there means nothing invented.
+  const c = readVariantExtras({ id: "v3", metadata: {} }, null);
+  assert.equal(c.cost, null);
+  assert.equal(c.ml, null);
+  assert.equal(c.systemType, null);
+});

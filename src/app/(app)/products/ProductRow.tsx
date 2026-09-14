@@ -33,13 +33,18 @@ function Source({ source }: { source: string }) {
   const label: Record<string, string> = {
     observed: "from sales",
     purchases: "from purchases",
+    medusa: "from Medusa",
     parsed: "from name",
     inferred: "from name",
     manual: "you set this",
     unknown: "missing",
   };
   const tone =
-    source === "manual" ? "badge-filed" : source === "unknown" ? "badge-overdue" : "badge-ready";
+    source === "manual" || source === "medusa"
+      ? "badge-filed"
+      : source === "unknown"
+        ? "badge-overdue"
+        : "badge-ready";
   return <span className={`badge ${tone}`}>{label[source] ?? source}</span>;
 }
 
