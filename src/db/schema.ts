@@ -456,7 +456,11 @@ export const medusaProducts = pgTable(
     metadata: jsonb("metadata").$type<Record<string, unknown>>(),
     /** The `products.sku` this variant was matched to, and how. */
     matchedSku: text("matched_sku"),
-    matchMethod: text("match_method"), // barcode | upc | ean | sku | none
+    matchMethod: text("match_method"), // barcode | upc | ean | sku | name | ambiguous | none
+    /** Similarity for a name match; null for an exact code match. */
+    matchScore: numeric("match_score", { precision: 5, scale: 4 }),
+    /** A match a person rejected. Never re-applied by a later sync. */
+    matchRejected: boolean("match_rejected").notNull().default(false),
     syncedAt: timestamp("synced_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [

@@ -4,7 +4,16 @@ import { db } from "@/db";
 import { integrations, medusaProducts, products } from "@/db/schema";
 import { decryptSecret, encryptSecret, last4 } from "@/lib/crypto";
 import { detectAuthScheme, iterateProducts } from "./client";
-import { normalizeBaseUrl, normalizeCode, readVariantExtras, type AuthScheme } from "./match";
+import {
+  bestNameMatch,
+  buildNameIndex,
+  candidatesFor,
+  normalizeBaseUrl,
+  normalizeCode,
+  readVariantExtras,
+  type AuthScheme,
+  type NameCandidate,
+} from "./match";
 
 export { normalizeCode, readVariantExtras };
 
@@ -107,6 +116,8 @@ export type SyncResult = {
   matched: number;
   matchedByBarcode: number;
   matchedBySku: number;
+  matchedByName: number;
+  ambiguousNames: number;
   unmatchedVariants: number;
   unmatchedSoldSkus: string[];
 };
@@ -143,7 +154,15 @@ export async function syncMedusaCatalog(): Promise<SyncResult> {
     }
   }
 
-  // Replace the mirror wholesale - a variant deleted in Medusa should vanish here.
+  /* Replace the mirror wholesale - a variant deleted in Medusa should vanish
+     here - but carry rejected matches across, or a re-sync would undo them. */
+  const rejected = new Set(
+    (await db.select({ variantId: medusaProducts.variantId }).from(medusaProducts).where(dsql`${medusaProducts.matchRejected}`))
+      .map((r) => r.variantId),
+  );
+  for (const row of rows) {
+    if (rejected.has(row.variantId)) row.matchRejected = true;
+  }
   await db.delete(medusaProducts);
   for (let i = 0; i < rows.length; i += CHUNK) {
     await db.insert(medusaProducts).values(rows.slice(i, i + CHUNK)).onConflictDoNothing();
@@ -176,36 +195,81 @@ export async function syncMedusaCatalog(): Promise<SyncResult> {
 export async function matchMedusaToProducts() {
   const [variants, quantum] = await Promise.all([
     db.select().from(medusaProducts),
-    db.select({ sku: products.sku, units: products.unitsSold }).from(products),
+    db
+      .select({ sku: products.sku, units: products.unitsSold, description: products.description })
+      .from(products),
   ]);
 
-  const bySku = new Map<string, string>(); // normalized -> real products.sku
+  const bySku = new Map<string, string>(); // normalized code -> real products.sku
   for (const p of quantum) {
     const n = normalizeCode(p.sku);
     if (n) bySku.set(n, p.sku);
   }
 
+  /* Name matching only ever runs against products that actually sold - those
+     are the only ones a wholesale cost can change a return for, and it keeps
+     the candidate pool small and meaningful. */
+  const nameCandidates: NameCandidate[] = quantum
+    .filter((p) => Number(p.units) !== 0 && p.description)
+    .map((p) => ({ key: p.sku, name: p.description }));
+  const byKey = new Map(nameCandidates.map((c) => [c.key, c]));
+  const nameIndex = buildNameIndex(nameCandidates);
+
   let matched = 0;
   let matchedByBarcode = 0;
   let matchedBySku = 0;
-  const updates: { id: number; matchedSku: string | null; matchMethod: string }[] = [];
+  let matchedByName = 0;
+  let ambiguousNames = 0;
+
+  const updates: {
+    id: number;
+    matchedSku: string | null;
+    matchMethod: string;
+    matchScore: number | null;
+  }[] = [];
   const matchedTargets = new Set<string>();
 
   for (const v of variants) {
-    const candidates: [string, string | null][] = [
+    // A match a person rejected stays rejected.
+    if (v.matchRejected) {
+      updates.push({ id: v.id, matchedSku: null, matchMethod: "rejected", matchScore: null });
+      continue;
+    }
+
+    const codes: [string, string | null][] = [
       ["barcode", v.barcode],
       ["upc", v.upc],
       ["ean", v.ean],
       ["sku", v.sku],
     ];
-    let hit: { sku: string; method: string } | null = null;
-    for (const [method, raw] of candidates) {
+
+    let hit: { sku: string; method: string; score: number | null } | null = null;
+    for (const [method, raw] of codes) {
       const n = normalizeCode(raw);
       if (!n) continue;
       const target = bySku.get(n);
       if (target) {
-        hit = { sku: target, method };
+        hit = { sku: target, method, score: null };
         break;
+      }
+    }
+
+    /* No code matched - fall back to the product name. */
+    if (!hit) {
+      const label = [v.productTitle, v.variantTitle].filter(Boolean).join(" ");
+      const result = bestNameMatch(label, candidatesFor(label, nameIndex, byKey));
+      if (result?.ambiguous) {
+        ambiguousNames += 1;
+        updates.push({
+          id: v.id,
+          matchedSku: null,
+          matchMethod: "ambiguous",
+          matchScore: Math.round(result.score * 10000) / 10000,
+        });
+        continue;
+      }
+      if (result?.key) {
+        hit = { sku: result.key, method: "name", score: Math.round(result.score * 10000) / 10000 };
       }
     }
 
@@ -213,12 +277,15 @@ export async function matchMedusaToProducts() {
       matched += 1;
       matchedTargets.add(hit.sku);
       if (hit.method === "sku") matchedBySku += 1;
+      else if (hit.method === "name") matchedByName += 1;
       else matchedByBarcode += 1;
     }
+
     updates.push({
       id: v.id,
       matchedSku: hit?.sku ?? null,
       matchMethod: hit?.method ?? "none",
+      matchScore: hit?.score ?? null,
     });
   }
 
@@ -226,11 +293,16 @@ export async function matchMedusaToProducts() {
     const slice = updates.slice(i, i + CHUNK);
     await db.execute(dsql`
       UPDATE medusa_products AS m
-      SET matched_sku = v.matched_sku, match_method = v.match_method
+      SET matched_sku = v.matched_sku,
+          match_method = v.match_method,
+          match_score = v.match_score
       FROM (VALUES ${dsql.join(
-        slice.map((u) => dsql`(${u.id}::int, ${u.matchedSku}::text, ${u.matchMethod}::text)`),
+        slice.map(
+          (u) =>
+            dsql`(${u.id}::int, ${u.matchedSku}::text, ${u.matchMethod}::text, ${u.matchScore}::numeric)`,
+        ),
         dsql`, `,
-      )}) AS v(id, matched_sku, match_method)
+      )}) AS v(id, matched_sku, match_method, match_score)
       WHERE m.id = v.id
     `);
   }
@@ -240,9 +312,30 @@ export async function matchMedusaToProducts() {
     matched,
     matchedByBarcode,
     matchedBySku,
+    matchedByName,
+    ambiguousNames,
     unmatchedVariants: variants.length - matched,
     unmatchedSoldSkus: soldSkus.filter((s) => !matchedTargets.has(s)).slice(0, 20),
   };
+}
+
+/** A person overriding the matcher, in either direction. */
+export async function setMatchDecision(
+  variantId: number,
+  decision: "reject" | "accept",
+  sku?: string,
+) {
+  if (decision === "reject") {
+    await db
+      .update(medusaProducts)
+      .set({ matchRejected: true, matchedSku: null, matchMethod: "rejected", matchScore: null })
+      .where(eq(medusaProducts.id, variantId));
+    return;
+  }
+  await db
+    .update(medusaProducts)
+    .set({ matchRejected: false, matchedSku: sku ?? null, matchMethod: "manual", matchScore: null })
+    .where(eq(medusaProducts.id, variantId));
 }
 
 /** Cost / mL / open-closed that Medusa supplies, keyed by products.sku. */
@@ -252,7 +345,10 @@ export async function medusaEnrichmentBySku() {
     .from(medusaProducts)
     .where(dsql`${medusaProducts.matchedSku} IS NOT NULL`);
 
-  const map = new Map<string, { cost: number | null; ml: number | null; systemType: string | null }>();
+  const map = new Map<
+    string,
+    { cost: number | null; ml: number | null; systemType: string | null; viaName: boolean }
+  >();
   for (const r of rows) {
     if (!r.matchedSku) continue;
     const existing = map.get(r.matchedSku);
@@ -260,6 +356,7 @@ export async function medusaEnrichmentBySku() {
       cost: r.wholesaleCost ? Number(r.wholesaleCost) : (existing?.cost ?? null),
       ml: r.liquidMl ? Number(r.liquidMl) : (existing?.ml ?? null),
       systemType: r.systemType ?? existing?.systemType ?? null,
+      viaName: r.matchMethod === "name" || (existing?.viaName ?? false),
     });
   }
   return map;

@@ -5,6 +5,7 @@ import { requireSession } from "@/lib/auth";
 import {
   deleteIntegration,
   saveAndTestIntegration,
+  setMatchDecision,
   syncMedusaCatalog,
   type SyncResult,
 } from "@/lib/medusa/sync";
@@ -46,4 +47,13 @@ export async function runMedusaSync(): Promise<
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
+}
+
+/** Confirm or reject a name match. A rejection sticks across future syncs. */
+export async function decideMedusaMatch(variantRowId: number, decision: "reject" | "accept") {
+  await requireSession();
+  await setMatchDecision(variantRowId, decision);
+  await refreshProductCatalog();
+  revalidatePath("/config/medusa");
+  revalidatePath("/products");
 }

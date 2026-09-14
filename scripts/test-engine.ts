@@ -577,3 +577,61 @@ test("cost, mL and open/closed are read out of Medusa metadata", async () => {
   assert.equal(c.ml, null);
   assert.equal(c.systemType, null);
 });
+
+test("name matching accepts a clear winner and refuses a coin flip", async () => {
+  const { bestNameMatch, scoreNames } = await import("../src/lib/medusa/match");
+
+  const avalara = [
+    { key: "6573457375317", name: "SUORIN AIR PRO POD CARTRIDGE - 20 PACK" },
+    { key: "7013915263061", name: "SUORIN FERO - REPLACEMENT POD CARTRIDGE (0.6 & 0.8)" },
+    { key: "6780362522709", name: "SUORIN AIR MINI POD CARTRIDGE - 1 SINGLE POD" },
+  ];
+
+  // Same product, different punctuation and casing.
+  const clear = bestNameMatch("Suorin Air Pro Pod Cartridge – 20 Pack", avalara);
+  assert.equal(clear?.ambiguous, false);
+  assert.equal(clear && !clear.ambiguous ? clear.key : null, "6573457375317");
+  assert.ok((clear?.score ?? 0) > 0.9);
+
+  // A different product entirely must not match at all.
+  assert.equal(bestNameMatch("Geek Bar Pulse 15000 Blue Razz", avalara), null);
+
+  // Two colourways of one device are a coin flip - so pick neither.
+  const colourways = [
+    { key: "AAA", name: "SUORIN AIR PRO - 18W POD SYSTEM - RAINBOW CHROME" },
+    { key: "BBB", name: "SUORIN AIR PRO - 18W POD SYSTEM - GUNMETAL GREY" },
+  ];
+  const ambiguous = bestNameMatch("Suorin Air Pro 18W Pod System", colourways);
+  assert.equal(ambiguous?.ambiguous, true, "a near-tie must not be resolved by guessing");
+  assert.equal(ambiguous && ambiguous.ambiguous ? ambiguous.key : "x", null);
+
+  // Sharing only filler words scores nothing.
+  assert.equal(scoreNames("THE AND FOR", "AND FOR THE"), 0);
+});
+
+test("name scoring is symmetric and bounded", async () => {
+  const { scoreNames } = await import("../src/lib/medusa/match");
+  const a = "SUORIN DROP 2 REPLACEMENT POD CARTRIDGE - BLACK - 20 PACK";
+  const b = "Suorin Drop 2 Replacement Pod Cartridge Black 20 Pack";
+
+  assert.equal(scoreNames(a, b), scoreNames(b, a));
+  assert.ok(scoreNames(a, a) === 1, "a name matches itself exactly");
+  assert.ok(scoreNames(a, b) >= 0.9);
+  assert.equal(scoreNames(a, null), 0);
+  assert.equal(scoreNames(null, b), 0);
+});
+
+test("the candidate index narrows the field without losing the right answer", async () => {
+  const { buildNameIndex, candidatesFor } = await import("../src/lib/medusa/match");
+
+  const candidates = [
+    { key: "A", name: "SUORIN AIR PRO POD CARTRIDGE 20 PACK" },
+    { key: "B", name: "GEEK BAR PULSE 15000 PUFFS" },
+    { key: "C", name: "LOST MARY MO5000 BLUE RAZZ" },
+  ];
+  const index = buildNameIndex(candidates);
+  const shortlist = candidatesFor("Suorin Air Pro Pod Cartridge", index, new Map(candidates.map((c) => [c.key, c])));
+
+  assert.ok(shortlist.some((c) => c.key === "A"), "the real match survives the shortlist");
+  assert.equal(shortlist.some((c) => c.key === "B"), false, "unrelated products are skipped");
+});

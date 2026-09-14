@@ -184,7 +184,8 @@ export async function refreshProductCatalog(): Promise<CatalogRefreshResult> {
       costSource = "purchases";
     } else if (fromMedusa?.cost != null) {
       wholesaleCost = fromMedusa.cost;
-      costSource = "medusa";
+      // A name match is a judgement, not an identity - say which it was.
+      costSource = fromMedusa.viaName ? "medusa_name" : "medusa";
     } else {
       wholesaleCost = null;
       costSource = "unknown";
@@ -198,7 +199,7 @@ export async function refreshProductCatalog(): Promise<CatalogRefreshResult> {
       mlSource = "manual";
     } else if (fromMedusa?.ml != null) {
       liquidMl = fromMedusa.ml;
-      mlSource = "medusa";
+      mlSource = fromMedusa.viaName ? "medusa_name" : "medusa";
     } else if (c.liquidMl !== null) {
       liquidMl = c.liquidMl;
       mlSource = "parsed";
@@ -218,7 +219,7 @@ export async function refreshProductCatalog(): Promise<CatalogRefreshResult> {
       systemTypeSource = "manual";
     } else if (fromMedusa?.systemType) {
       systemType = fromMedusa.systemType;
-      systemTypeSource = "medusa";
+      systemTypeSource = fromMedusa.viaName ? "medusa_name" : "medusa";
     } else {
       systemType = c.systemType;
       systemTypeSource = c.systemType ? "inferred" : "unknown";

@@ -34,17 +34,21 @@ function Source({ source }: { source: string }) {
     observed: "from sales",
     purchases: "from purchases",
     medusa: "from Medusa",
+    medusa_name: "Medusa · name match",
     parsed: "from name",
     inferred: "from name",
     manual: "you set this",
     unknown: "missing",
   };
+  // A name match is a judgement call, so it reads as "check me", not "done".
   const tone =
     source === "manual" || source === "medusa"
       ? "badge-filed"
       : source === "unknown"
         ? "badge-overdue"
-        : "badge-ready";
+        : source === "medusa_name"
+          ? "badge-not_started"
+          : "badge-ready";
   return <span className={`badge ${tone}`}>{label[source] ?? source}</span>;
 }
 

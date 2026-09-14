@@ -9,6 +9,7 @@ import {
   saveMedusaConnection,
 } from "@/app/actions/medusa";
 import type { SyncResult } from "@/lib/medusa/sync";
+import { MatchReview, type MatchRow } from "./MatchReview";
 
 type Connection = {
   baseUrl: string;
@@ -25,10 +26,19 @@ type Connection = {
 export function MedusaPanel({
   connection,
   counts,
+  nameMatches,
   unmatchedSamples,
 }: {
   connection: Connection;
-  counts: { variants: number; matched: number; withCost: number; withMl: number };
+  counts: {
+    variants: number;
+    matched: number;
+    byName: number;
+    ambiguous: number;
+    withCost: number;
+    withMl: number;
+  };
+  nameMatches: MatchRow[];
   unmatchedSamples: { sku: string | null; barcode: string | null; title: string | null }[];
 }) {
   const [state, formAction, saving] = useActionState(
@@ -140,8 +150,9 @@ export function MedusaPanel({
             <div>
               <h2 className="text-[14px] font-semibold">Catalog sync</h2>
               <p className="mt-1 text-[12.5px] text-[var(--muted)]">
-                Pulls every product and variant, then matches them to the item codes Avalara
-                reports — barcode first, then UPC, EAN, and finally the Medusa SKU.
+                Pulls every product and variant, then matches them to what Avalara reports —
+                barcode first, then UPC, EAN, then the Medusa SKU, and finally the{" "}
+                <strong>product name</strong> when no code lines up.
               </p>
             </div>
             <button
@@ -179,8 +190,12 @@ export function MedusaPanel({
                   value: (sync?.matched ?? counts.matched).toLocaleString(),
                   tone: (sync?.matched ?? counts.matched) === 0 ? "warn" : "ok",
                 },
+                {
+                  label: "Matched by name",
+                  value: (sync?.matchedByName ?? counts.byName).toLocaleString(),
+                  tone: (sync?.matchedByName ?? counts.byName) > 0 ? "warn" : undefined,
+                },
                 { label: "With wholesale cost", value: (sync?.withCost ?? counts.withCost).toLocaleString() },
-                { label: "With mL", value: (sync?.withMl ?? counts.withMl).toLocaleString() },
               ].map((t) => (
                 <div key={t.label} className="stat">
                   <div className="stat-label">{t.label}</div>
@@ -219,6 +234,35 @@ export function MedusaPanel({
                   empty on its variants.
                 </>
               )}
+            </div>
+          )}
+
+          {nameMatches.length > 0 && (
+            <div className="mt-5">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-[13px] font-semibold">
+                  Name matches to review ({nameMatches.length})
+                </h3>
+                <span className="badge badge-not_started">judgement calls</span>
+              </div>
+              <p className="mt-1 mb-3 max-w-[80ch] text-[12px] text-[var(--muted)]">
+                These had no barcode in common, so they were matched on the product name. A wrong
+                one assigns a wrong wholesale cost and quietly understates or overstates an excise
+                return — so check them. Lowest confidence first.
+              </p>
+              <MatchReview rows={nameMatches} />
+            </div>
+          )}
+
+          {(sync?.ambiguousNames ?? counts.ambiguous) > 0 && (
+            <div className="callout callout-note mt-4">
+              <strong>
+                {(sync?.ambiguousNames ?? counts.ambiguous).toLocaleString()} variant(s) were too
+                close to call.
+              </strong>{" "}
+              Their names scored high against two or more different products — usually colour or
+              flavour variants of one another. Rather than pick one at random, none was matched.
+              Adding the barcode to those variants in Medusa resolves it exactly.
             </div>
           )}
 
