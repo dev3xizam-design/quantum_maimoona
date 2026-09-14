@@ -1,30 +1,84 @@
-import { desc } from "drizzle-orm";
+import { and, asc, desc, eq, isNotNull, isNull, ne, or, sql as dsql } from "drizzle-orm";
 import { db } from "@/db";
 import { products } from "@/db/schema";
-import { fmtMoney, num } from "@/lib/money";
+import { num } from "@/lib/money";
 import { ProductTable } from "./ProductTable";
 import type { ProductView } from "./ProductRow";
 
 export const dynamic = "force-dynamic";
+export const metadata = { title: "Products" };
 
-function Tile({ label, value, sub, tone }: { label: string; value: string; sub?: string; tone?: "warn" | "ok" }) {
-  return (
-    <div className="stat">
-      <div className="stat-label">{label}</div>
-      <div
-        className={`stat-value ${
-          tone === "warn" ? "text-[var(--danger)]" : tone === "ok" ? "text-[var(--ok)]" : ""
-        }`}
-      >
-        {value}
-      </div>
-      {sub && <div className="stat-sub">{sub}</div>}
-    </div>
-  );
-}
+const PAGE_SIZE = 100;
 
-export default async function ProductsPage() {
-  const rows = await db.select().from(products).orderBy(desc(products.revenue)).limit(2000);
+export type ProductTab = "all" | "review" | "cost" | "ml" | "system" | "reviewed";
+
+/**
+ * Counts come from SQL over the WHOLE table, and rows are paged. The earlier
+ * version loaded a slice and counted the slice, so every tab under-reported
+ * once the catalog passed the slice size - "Needs review 0" when it was 1,198.
+ */
+const WHERE = {
+  all: undefined,
+  review: and(eq(products.needsReview, true), isNull(products.reviewedAt)),
+  cost: and(eq(products.containsNicotine, true), isNull(products.wholesaleCost)),
+  ml: and(eq(products.containsNicotine, true), isNull(products.liquidMl)),
+  system: and(eq(products.containsNicotine, true), isNull(products.systemType)),
+  reviewed: isNotNull(products.reviewedAt),
+} as const;
+
+export default async function ProductsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string; q?: string; page?: string }>;
+}) {
+  const sp = await searchParams;
+  const tab = (["all", "review", "cost", "ml", "system", "reviewed"].includes(sp.tab ?? "")
+    ? sp.tab
+    : "all") as ProductTab;
+  const query = (sp.q ?? "").trim();
+  const page = Math.max(1, Number(sp.page ?? 1) || 1);
+
+  const [countsRow] = await db
+    .select({
+      all: dsql<number>`count(*)::int`,
+      review: dsql<number>`count(*) FILTER (WHERE ${products.needsReview} AND ${products.reviewedAt} IS NULL)::int`,
+      cost: dsql<number>`count(*) FILTER (WHERE ${products.containsNicotine} AND ${products.wholesaleCost} IS NULL)::int`,
+      ml: dsql<number>`count(*) FILTER (WHERE ${products.containsNicotine} AND ${products.liquidMl} IS NULL)::int`,
+      system: dsql<number>`count(*) FILTER (WHERE ${products.containsNicotine} AND ${products.systemType} IS NULL)::int`,
+      reviewed: dsql<number>`count(*) FILTER (WHERE ${products.reviewedAt} IS NOT NULL)::int`,
+      sold: dsql<number>`count(*) FILTER (WHERE ${products.unitsSold} <> 0)::int`,
+      priced: dsql<number>`count(*) FILTER (WHERE ${products.retailPrice} IS NOT NULL)::int`,
+      revenue: dsql<number>`coalesce(sum(${products.revenue}), 0)::float8`,
+      missingCostRevenue: dsql<number>`coalesce(sum(${products.revenue}) FILTER (WHERE ${products.containsNicotine} AND ${products.wholesaleCost} IS NULL), 0)::float8`,
+      neverSoldWithCost: dsql<number>`count(*) FILTER (WHERE ${products.unitsSold} = 0 AND ${products.wholesaleCost} IS NOT NULL)::int`,
+      soldWithCost: dsql<number>`count(*) FILTER (WHERE ${products.unitsSold} <> 0 AND ${products.wholesaleCost} IS NOT NULL)::int`,
+    })
+    .from(products);
+
+  const search = query
+    ? or(
+        dsql`${products.sku} ILIKE ${"%" + query + "%"}`,
+        dsql`${products.description} ILIKE ${"%" + query + "%"}`,
+      )
+    : undefined;
+  const where = [WHERE[tab], search].filter(Boolean);
+  const filter = where.length ? and(...where) : undefined;
+
+  const [matching] = await db
+    .select({ n: dsql<number>`count(*)::int` })
+    .from(products)
+    .where(filter);
+  const total = Number(matching.n);
+  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const current = Math.min(page, pages);
+
+  const rows = await db
+    .select()
+    .from(products)
+    .where(filter)
+    .orderBy(desc(products.revenue), asc(products.sku))
+    .limit(PAGE_SIZE)
+    .offset((current - 1) * PAGE_SIZE);
 
   const view: ProductView[] = rows.map((p) => ({
     id: p.id,
@@ -50,87 +104,37 @@ export default async function ProductsPage() {
     reviewedAt: p.reviewedAt ? p.reviewedAt.toISOString().slice(0, 10) : null,
   }));
 
-  const nicotine = view.filter((p) => p.containsNicotine);
-  const sold = view.filter((p) => p.unitsSold !== 0);
-  const neverSold = view.filter((p) => p.unitsSold === 0);
-  const soldWithCost = sold.filter((p) => p.wholesaleCost !== null).length;
-  /**
-   * A master full of costed SKUs that have never been sold, next to sold SKUs
-   * with no cost, means the two files key products differently - the cost data
-   * exists but will never reach a return.
-   */
+  const counts = {
+    all: Number(countsRow.all),
+    review: Number(countsRow.review),
+    cost: Number(countsRow.cost),
+    ml: Number(countsRow.ml),
+    system: Number(countsRow.system),
+    reviewed: Number(countsRow.reviewed),
+  };
+
   const skuMismatch =
-    sold.length > 0 &&
-    soldWithCost === 0 &&
-    neverSold.filter((p) => p.wholesaleCost !== null).length > 20;
-  const totalRevenue = view.reduce((s, p) => s + p.revenue, 0);
-  const missingCost = nicotine.filter((p) => p.wholesaleCost === null);
-  const missingCostRevenue = missingCost.reduce((s, p) => s + p.revenue, 0);
-  const priced = view.filter((p) => p.retailPrice !== null).length;
+    Number(countsRow.sold) > 0 &&
+    Number(countsRow.soldWithCost) === 0 &&
+    Number(countsRow.neverSoldWithCost) > 20;
 
   return (
-    <div className="space-y-4">
-      <ProductTable products={view} />
-
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Tile
-          label="SKUs in catalog"
-          value={view.length.toLocaleString()}
-          sub={`${fmtMoney(totalRevenue)} of sales`}
-        />
-        <Tile
-          label="Priced automatically"
-          value={`${priced} / ${view.length}`}
-          tone={priced === view.length && view.length > 0 ? "ok" : undefined}
-          sub="unit price measured from the line amounts"
-        />
-        <Tile
-          label="Missing wholesale cost"
-          value={String(missingCost.length)}
-          tone={missingCost.length ? "warn" : "ok"}
-          sub={
-            missingCost.length
-              ? `${fmtMoney(missingCostRevenue)} of sales affected`
-              : "nothing outstanding"
-          }
-        />
-        <Tile
-          label="Needs review"
-          value={String(view.filter((p) => p.needsReview).length)}
-          tone={view.some((p) => p.needsReview) ? "warn" : "ok"}
-          sub="listed first in the tabs above"
-        />
-      </div>
-
-      {skuMismatch && (
-        <div className="callout callout-warn">
-          <strong>Your product master and the Avalara export do not use the same SKUs.</strong>{" "}
-          {neverSold.filter((p) => p.wholesaleCost !== null).length.toLocaleString()} SKUs in the
-          catalog have a wholesale cost but have never appeared on a sale, while all{" "}
-          {sold.length.toLocaleString()} SKUs that did sell have no cost at all. The cost data is
-          loaded, it just cannot be matched — so every percentage-of-wholesale excise return is
-          still understated. Re-export the master keyed on the same item code Avalara reports (the
-          sold SKUs look like barcodes), or add that code as the <code>sku</code> column.
-        </div>
-      )}
-
-      <div className="help">
-        <strong>Reviewed means read, not fixed.</strong> Marking a SKU reviewed records that you
-        have looked at it. It does <em>not</em> fill in the missing wholesale cost or mL — the
-        Missing cost and Missing mL tabs keep counting it, and the excise return keeps reporting
-        that it is understated. Use it to clear the noise once you have decided a gap is acceptable.
-      </div>
-
-      <div className="help">
-        <strong>What builds itself, and what does not.</strong> The SKU list, product names, units
-        sold, revenue and the <em>real</em> per-unit selling price all come straight from the export
-        and refresh on every upload. Volume in mL and open/closed are read out of the product name
-        where it states them. Two things a sales-tax export simply does not contain:{" "}
-        <strong>wholesale cost</strong> (upload the purchase import and it fills in, or type it once
-        per SKU) and <strong>mL for pods and disposables</strong> whose names never state a volume.
-        Those are left empty rather than estimated — a guessed cost would understate an excise
-        return.
-      </div>
-    </div>
+    <ProductTable
+      rows={view}
+      counts={counts}
+      tab={tab}
+      query={query}
+      page={current}
+      pages={pages}
+      matching={total}
+      summary={{
+        sold: Number(countsRow.sold),
+        priced: Number(countsRow.priced),
+        revenue: Number(countsRow.revenue),
+        missingCostRevenue: Number(countsRow.missingCostRevenue),
+        neverSoldWithCost: Number(countsRow.neverSoldWithCost),
+        skuMismatch,
+      }}
+    />
   );
 }

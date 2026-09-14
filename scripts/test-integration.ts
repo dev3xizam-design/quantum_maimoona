@@ -737,3 +737,57 @@ test("many stores can be connected, each keeping its own catalog and orders", as
   assert.equal(remaining.length, 1);
   assert.equal(remaining[0].slug, "vapecloseouts");
 });
+
+test("product tab counts come from the whole table, not the page being shown", async () => {
+  const { db } = await import("../src/db");
+  const { sql: dsql } = await import("drizzle-orm");
+
+  // More rows than any one page, so a slice-based count would be wrong.
+  const many = Array.from({ length: 250 }, (_, i) => ({
+    sku: `PAGED-${String(i).padStart(4, "0")}`,
+    description: `Paged product ${i}`,
+    containsNicotine: true,
+    needsReview: i % 2 === 0,
+    revenue: String(1000 - i),
+    unitsSold: "1",
+  }));
+  for (let i = 0; i < many.length; i += 100) {
+    await db.insert(schema.products).values(many.slice(i, i + 100)).onConflictDoNothing();
+  }
+
+  const rows = (r: unknown) =>
+    (Array.isArray(r) ? r : (r as { rows: Record<string, unknown>[] }).rows) as Record<string, unknown>[];
+
+  const [counts] = rows(
+    await db.execute(dsql`
+      SELECT count(*)::int all_rows,
+             count(*) FILTER (WHERE needs_review AND reviewed_at IS NULL)::int review,
+             count(*) FILTER (WHERE contains_nicotine AND wholesale_cost IS NULL)::int cost
+      FROM products`),
+  );
+
+  assert.ok(Number(counts.all_rows) > 100, "the catalog is larger than one page");
+  assert.ok(Number(counts.review) >= 125, "every outstanding row is counted, not just page one");
+  assert.ok(Number(counts.cost) >= 125);
+
+  // A page is a slice of that, ordered deterministically.
+  const page1 = await db
+    .select({ sku: schema.products.sku })
+    .from(schema.products)
+    .orderBy(dsql`${schema.products.revenue} DESC`, schema.products.sku)
+    .limit(100);
+  const page2 = await db
+    .select({ sku: schema.products.sku })
+    .from(schema.products)
+    .orderBy(dsql`${schema.products.revenue} DESC`, schema.products.sku)
+    .limit(100)
+    .offset(100);
+
+  assert.equal(page1.length, 100);
+  assert.ok(page2.length > 0);
+  assert.equal(
+    page1.some((r) => page2.some((s) => s.sku === r.sku)),
+    false,
+    "pages do not overlap",
+  );
+});
