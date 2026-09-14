@@ -791,3 +791,71 @@ test("product tab counts come from the whole table, not the page being shown", a
     "pages do not overlap",
   );
 });
+
+test("every store variant is registered as a product, searchable by name", async () => {
+  const { db } = await import("../src/db");
+  const { eq, and, sql: dsql } = await import("drizzle-orm");
+
+  const [store] = await db
+    .insert(schema.integrations)
+    .values({ slug: "reg-test", name: "Reg Test Store", baseUrl: "https://reg.example.com", status: "ok" })
+    .returning();
+
+  // Two variants: one whose barcode already exists as a sold SKU, one brand new.
+  await db.insert(schema.products).values({
+    sku: "EXISTING-1", description: "Already sold thing", unitsSold: "5", revenue: "100",
+  }).onConflictDoNothing();
+
+  await db.insert(schema.medusaProducts).values([
+    {
+      integrationId: store.id, variantId: "reg:v1", productTitle: "Already sold thing",
+      barcode: "EXISTING-1", matchedSku: "EXISTING-1", matchMethod: "barcode",
+    },
+    {
+      integrationId: store.id, variantId: "reg:v2", productTitle: "Brand New Juice",
+      variantTitle: "60ML", barcode: "9900001", sku: "INT-9900001",
+      wholesaleCost: "7.25", liquidMl: "60", systemType: "OPEN",
+    },
+    {
+      integrationId: store.id, variantId: "reg:v3", productTitle: "No Barcode Pod",
+      sku: "INT-777", matchedSku: null,
+    },
+  ]);
+
+  const { syncCatalogRegisterOnly } = await import("./helpers/register");
+  const added = await syncCatalogRegisterOnly(store.id, store.name);
+  assert.equal(added, 2, "the matched variant is not duplicated; the other two are registered");
+
+  // Registered under the barcode, so a later Avalara export lands on this row.
+  const [fresh] = await db.select().from(schema.products).where(eq(schema.products.sku, "9900001"));
+  assert.ok(fresh, "registered under its barcode");
+  assert.equal(fresh.description, "Brand New Juice - 60ML");
+  assert.equal(fresh.source, "medusa");
+  assert.equal(fresh.storeName, "Reg Test Store");
+  assert.equal(Number(fresh.wholesaleCost), 7.25);
+  assert.equal(Number(fresh.liquidMl), 60);
+  assert.equal(fresh.systemType, "OPEN");
+  assert.equal(fresh.needsReview, false, "it has never sold, so there is nothing to review yet");
+
+  // Falls back to the internal SKU when there is no barcode.
+  const [noBarcode] = await db.select().from(schema.products).where(eq(schema.products.sku, "INT-777"));
+  assert.ok(noBarcode, "still registered, keyed on the Medusa sku");
+
+  // Searchable by name, which is the point of having them all in here.
+  const found = await db
+    .select({ sku: schema.products.sku })
+    .from(schema.products)
+    .where(dsql`${schema.products.description} ILIKE ${"%brand new%"}`);
+  assert.equal(found.length, 1);
+  assert.equal(found[0].sku, "9900001");
+
+  // Re-running must not create a second copy.
+  const againCount = await syncCatalogRegisterOnly(store.id, store.name);
+  assert.equal(againCount, 0, "already registered, so nothing is added twice");
+
+  const all = await db
+    .select({ n: dsql<number>`count(*)::int` })
+    .from(schema.products)
+    .where(and(eq(schema.products.storeName, "Reg Test Store")));
+  assert.equal(Number(all[0].n), 2);
+});

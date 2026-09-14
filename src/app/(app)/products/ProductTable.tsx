@@ -43,6 +43,8 @@ export function ProductTable({
   counts,
   tab,
   query,
+  stores,
+  store,
   page,
   pages,
   matching,
@@ -52,6 +54,8 @@ export function ProductTable({
   counts: Record<Tab, number>;
   tab: Tab;
   query: string;
+  stores: { name: string; count: number }[];
+  store: string;
   page: number;
   pages: number;
   matching: number;
@@ -105,11 +109,26 @@ export function ProductTable({
           <div>
             <h1 className="page-title">Products</h1>
             <p className="page-sub mt-0.5">
-              Built automatically from every sale line in the Avalara export, enriched from your
-              connected stores. Prices are measured from what you actually charged.
+              Every SKU you sell — built from the Avalara export and from every connected store.
+              Search by name or SKU; prices are measured from what you actually charged.
             </p>
           </div>
           <div className="pagehead-actions">
+            {stores.length > 0 && (
+              <select
+                value={store}
+                onChange={(e) => go({ store: e.target.value || undefined, page: undefined })}
+                className="w-[190px]"
+              >
+                <option value="">All sources</option>
+                <option value="avalara">From sales only</option>
+                {stores.map((s) => (
+                  <option key={s.name} value={s.name}>
+                    {s.name} ({s.count.toLocaleString()})
+                  </option>
+                ))}
+              </select>
+            )}
             <form
               onSubmit={(e) => {
                 e.preventDefault();

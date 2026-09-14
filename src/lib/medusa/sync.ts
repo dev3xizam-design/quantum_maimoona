@@ -2,6 +2,7 @@ import "server-only";
 import { and, eq, inArray, sql as dsql } from "drizzle-orm";
 import { db } from "@/db";
 import { integrations, medusaProducts, products, shipments } from "@/db/schema";
+import { classifyProduct } from "@/lib/products/classify";
 import { decryptSecret, encryptSecret, last4 } from "@/lib/crypto";
 import { detectAuthScheme, iterateProducts } from "./client";
 import {
@@ -169,6 +170,8 @@ export async function deleteConnection(id: number) {
 
 export type SyncResult = {
   store: string;
+  /** Variants added to the Quantum catalog in their own right. */
+  registered: number;
   products: number;
   variants: number;
   withBarcode: number;
@@ -231,15 +234,34 @@ export async function syncCatalog(integrationId: number): Promise<SyncResult> {
   }
 
   const match = await matchMedusaToProducts();
+  const added = await registerVariantsAsProducts(integrationId, row.name);
+
+  /* matchMedusaToProducts scores every store at once; report THIS store's share
+     so a per-store number never reads higher than its own variant count. */
+  const [mine] = await db
+    .select({
+      matched: dsql<number>`count(*) FILTER (WHERE ${medusaProducts.matchedSku} IS NOT NULL)::int`,
+      byName: dsql<number>`count(*) FILTER (WHERE ${medusaProducts.matchMethod} = 'name')::int`,
+      byCode: dsql<number>`count(*) FILTER (WHERE ${medusaProducts.matchMethod} IN ('barcode','upc','ean','sku'))::int`,
+      ambiguous: dsql<number>`count(*) FILTER (WHERE ${medusaProducts.matchMethod} = 'ambiguous')::int`,
+    })
+    .from(medusaProducts)
+    .where(eq(medusaProducts.integrationId, integrationId));
 
   const stats: SyncResult = {
     store: row.name,
+    registered: added,
     products: productCount,
     variants: rows.length,
     withBarcode: rows.filter((r) => r.barcode || r.upc || r.ean).length,
     withCost: rows.filter((r) => r.wholesaleCost).length,
     withMl: rows.filter((r) => r.liquidMl).length,
     ...match,
+    matched: Number(mine.matched),
+    matchedByBarcode: Number(mine.byCode),
+    matchedByName: Number(mine.byName),
+    ambiguousNames: Number(mine.ambiguous),
+    unmatchedVariants: rows.length - Number(mine.matched),
   };
 
   await db
@@ -253,6 +275,80 @@ export async function syncCatalog(integrationId: number): Promise<SyncResult> {
     .where(eq(integrations.id, integrationId));
 
   return stats;
+}
+
+/**
+ * Every variant becomes a product in Quantum's own catalog, not just a mirror
+ * row. A variant that matched an existing SKU is already there; the rest are
+ * registered under their barcode where they have one, so a later Avalara export
+ * lands on the same row rather than creating a second one.
+ *
+ * These carry no sales, so they cannot move a tax return - they are there to be
+ * searched, and to be ready the moment one of them sells.
+ */
+async function registerVariantsAsProducts(integrationId: number, storeName: string) {
+  const variants = await db
+    .select()
+    .from(medusaProducts)
+    .where(and(eq(medusaProducts.integrationId, integrationId), dsql`${medusaProducts.matchedSku} IS NULL`));
+
+  const existing = new Set(
+    (await db.select({ sku: products.sku }).from(products)).map((p) => p.sku.trim().toUpperCase()),
+  );
+
+  const values: (typeof products.$inferInsert)[] = [];
+  const seen = new Set<string>();
+
+  for (const v of variants) {
+    // Prefer the barcode: that is what a sales export will report later.
+    const raw = v.barcode || v.upc || v.ean || v.sku;
+    const sku = raw?.trim().toUpperCase();
+    if (!sku || seen.has(sku) || existing.has(sku)) continue;
+    seen.add(sku);
+
+    const description = [v.productTitle, v.variantTitle].filter(Boolean).join(" - ") || sku;
+    const c = classifyProduct(description, sku);
+    const cost = v.wholesaleCost ? Number(v.wholesaleCost) : null;
+    const ml = v.liquidMl ? Number(v.liquidMl) : c.liquidMl;
+    const systemType = v.systemType ?? c.systemType;
+
+    values.push({
+      sku,
+      description,
+      source: "medusa",
+      storeName,
+      medusaVariantId: v.variantId,
+      wholesaleCost: cost === null ? null : String(cost),
+      liquidMl: ml === null ? null : String(ml),
+      cartridgesPerUnit: c.cartridgesPerUnit === null ? null : String(c.cartridgesPerUnit),
+      systemType,
+      containsNicotine: c.containsNicotine,
+      costSource: cost === null ? "unknown" : "medusa",
+      mlSource: ml === null ? "unknown" : v.liquidMl ? "medusa" : "parsed",
+      systemTypeSource: systemType === null ? "unknown" : v.systemType ? "medusa" : "inferred",
+      classificationNote: `From ${storeName}`,
+      // Never sold, so it cannot understate a return - nothing to review yet.
+      needsReview: false,
+      updatedAt: new Date(),
+    });
+  }
+
+  for (let i = 0; i < values.length; i += CHUNK) {
+    await db
+      .insert(products)
+      .values(values.slice(i, i + CHUNK))
+      .onConflictDoUpdate({
+        target: products.sku,
+        set: {
+          description: dsql`excluded.description`,
+          storeName: dsql`excluded.store_name`,
+          medusaVariantId: dsql`excluded.medusa_variant_id`,
+          updatedAt: dsql`excluded.updated_at`,
+        },
+      });
+  }
+
+  return values.length;
 }
 
 /* ------------------------------------------------------------------ */

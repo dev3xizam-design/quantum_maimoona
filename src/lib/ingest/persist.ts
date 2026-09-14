@@ -136,7 +136,14 @@ export async function upsertProducts(rows: ProductInput[]) {
     }
 
     row.lockedFields = [...locked];
+    /**
+     * Only a SKU that has actually sold can understate a return, so only those
+     * are worth reviewing. A catalogue entry that has never appeared on a sale
+     * is information, not an outstanding task.
+     */
+    const hasSold = Number(prior?.unitsSold ?? 0) !== 0;
     row.needsReview =
+      hasSold &&
       Boolean(row.containsNicotine) &&
       (row.wholesaleCost === null || row.systemType === null || row.liquidMl === null);
 

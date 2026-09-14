@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, isNotNull, isNull, ne, or, sql as dsql } from "drizzle-orm";
+import { and, asc, desc, eq, isNotNull, isNull, or, sql as dsql } from "drizzle-orm";
 import { db } from "@/db";
 import { products } from "@/db/schema";
 import { num } from "@/lib/money";
@@ -29,9 +29,10 @@ const WHERE = {
 export default async function ProductsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string; q?: string; page?: string }>;
+  searchParams: Promise<{ tab?: string; q?: string; page?: string; store?: string }>;
 }) {
   const sp = await searchParams;
+  const store = (sp.store ?? "").trim();
   const tab = (["all", "review", "cost", "ml", "system", "reviewed"].includes(sp.tab ?? "")
     ? sp.tab
     : "all") as ProductTab;
@@ -61,7 +62,12 @@ export default async function ProductsPage({
         dsql`${products.description} ILIKE ${"%" + query + "%"}`,
       )
     : undefined;
-  const where = [WHERE[tab], search].filter(Boolean);
+  const storeFilter = store
+    ? store === "avalara"
+      ? eq(products.source, "avalara")
+      : eq(products.storeName, store)
+    : undefined;
+  const where = [WHERE[tab], search, storeFilter].filter(Boolean);
   const filter = where.length ? and(...where) : undefined;
 
   const [matching] = await db
@@ -98,11 +104,21 @@ export default async function ProductsPage({
     systemTypeSource: p.systemTypeSource ?? "unknown",
     containsNicotine: p.containsNicotine,
     statesSold: p.statesSold ?? [],
+    source: p.source,
+    storeName: p.storeName,
     classificationNote: p.classificationNote,
     lockedFields: p.lockedFields ?? [],
     needsReview: p.needsReview,
     reviewedAt: p.reviewedAt ? p.reviewedAt.toISOString().slice(0, 10) : null,
   }));
+
+  const storeRows = await db
+    .select({ name: products.storeName, n: dsql<number>`count(*)::int` })
+    .from(products)
+    .where(dsql`${products.storeName} IS NOT NULL`)
+    .groupBy(products.storeName)
+    .orderBy(desc(dsql`count(*)`));
+  const stores = storeRows.map((r) => ({ name: r.name as string, count: Number(r.n) }));
 
   const counts = {
     all: Number(countsRow.all),
@@ -124,6 +140,8 @@ export default async function ProductsPage({
       counts={counts}
       tab={tab}
       query={query}
+      stores={stores}
+      store={store}
       page={current}
       pages={pages}
       matching={total}

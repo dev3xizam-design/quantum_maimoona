@@ -50,6 +50,13 @@
       "when": 1789386439209,
       "tag": "0006_overconfident_calypso",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1789393213203,
+      "tag": "0007_certain_earthquake",
+      "breakpoints": true
     }
   ]
 }

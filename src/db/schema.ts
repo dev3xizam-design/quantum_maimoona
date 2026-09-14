@@ -250,6 +250,11 @@ export const products = pgTable("products", {
   systemTypeSource: text("system_type_source").default("unknown"), // inferred | manual | unknown
   classificationNote: text("classification_note"),
 
+  /** Where this SKU came into the catalog from. */
+  source: text("source").notNull().default("avalara"), // avalara | medusa | upload
+  storeName: text("store_name"),
+  medusaVariantId: text("medusa_variant_id"),
+
   lockedFields: jsonb("locked_fields").$type<string[]>().default([]),
   /** Derived fact: something the excise engines need is missing. */
   needsReview: boolean("needs_review").notNull().default(false),

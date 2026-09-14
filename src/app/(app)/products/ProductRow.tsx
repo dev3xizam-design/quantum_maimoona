@@ -24,6 +24,8 @@ export type ProductView = {
   lockedFields: string[];
   needsReview: boolean;
   reviewedAt: string | null;
+  source: string;
+  storeName: string | null;
 };
 
 const money = (n: number | null) =>
@@ -77,9 +79,12 @@ export function ProductRow({
         </td>
         <td className="max-w-[300px]">
           <div className="truncate">{p.description ?? "—"}</div>
-          <div className="text-[10px] text-[var(--muted)]">
-            {p.statesSold.slice(0, 8).join(" ")}
-            {p.statesSold.length > 8 ? ` +${p.statesSold.length - 8}` : ""}
+          <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-[var(--muted)]">
+            {p.storeName && <span className="badge badge-no_activity">{p.storeName}</span>}
+            <span>
+              {p.statesSold.slice(0, 8).join(" ")}
+              {p.statesSold.length > 8 ? ` +${p.statesSold.length - 8}` : ""}
+            </span>
           </div>
         </td>
         <td className="num">{p.unitsSold.toLocaleString()}</td>
