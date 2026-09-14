@@ -631,3 +631,109 @@ test("a Medusa secret survives a round trip and is never stored in the clear", a
   assert.throws(() => decryptSecret(cipher.replace(/.$/, "A")));
 });
 
+
+test("Medusa orders become PACT shipment rows, and re-syncing does not duplicate them", async () => {
+  const { db } = await import("../src/db");
+  const { eq } = await import("drizzle-orm");
+  const { mapOrdersToShipments } = await import("../src/lib/medusa/orders");
+  const { insertShipments } = await import("../src/lib/ingest/persist");
+
+  const orders = [
+    {
+      id: "ord_1",
+      display_id: 1042,
+      created_at: "2026-08-09T12:00:00.000Z",
+      email: "jane@example.com",
+      status: "completed",
+      shipping_address: {
+        first_name: "Jane", last_name: "Doe", address_1: "12 Oak St",
+        city: "Tampa", province: "FL", postal_code: "33601", country_code: "us",
+      },
+      items: [
+        { id: "li_1", title: "Suorin Air Pro Pod", quantity: 2, variant_sku: "SKU-1" },
+        { id: "li_2", title: "Suorin Fero Pod", quantity: 1, variant_sku: "SKU-2" },
+      ],
+    },
+    // Cancelled and non-US orders are not shipments to report.
+    { id: "ord_2", status: "canceled", created_at: "2026-08-10T00:00:00.000Z",
+      shipping_address: { province: "FL", country_code: "us" }, items: [{ id: "li_3", quantity: 1 }] },
+    { id: "ord_3", status: "completed", created_at: "2026-08-11T00:00:00.000Z",
+      shipping_address: { province: "ON", country_code: "ca" }, items: [{ id: "li_4", quantity: 1 }] },
+  ];
+
+  const mapped = mapOrdersToShipments(orders, "mia");
+  assert.equal(mapped.rows.length, 2, "two line items from the one shippable order");
+  assert.equal(mapped.skippedCancelled, 1);
+  assert.equal(mapped.skippedNonUs, 1);
+  assert.equal(mapped.rows[0].customerName, "Jane Doe");
+  assert.equal(mapped.rows[0].shipToAddress, "12 Oak St");
+  assert.equal(mapped.rows[0].invoiceNumber, "1042");
+  assert.equal(mapped.rows[0].period, "2026-08");
+  assert.equal(mapped.rows[0].externalId, "medusa:mia:ord_1:li_1");
+
+  const [upload] = await db
+    .insert(schema.uploads)
+    .values({ filename: "medusa orders", kind: "shipments" })
+    .returning({ id: schema.uploads.id });
+
+  const payload = mapped.rows.map((r) => ({ ...r, sourceSystem: "medusa", sourceLabel: "MIA" }));
+  await insertShipments(upload.id, payload);
+  await insertShipments(upload.id, payload); // the same sync run twice
+
+  const stored = await db
+    .select()
+    .from(schema.shipments)
+    .where(eq(schema.shipments.sourceSystem, "medusa"));
+  assert.equal(stored.length, 2, "a repeated sync corrects rows rather than doubling the filing");
+  assert.equal(stored[0].customerName, "Jane Doe");
+});
+
+test("PACT prefers the order feed over the sales export", async () => {
+  const { computeFiling } = await import("../src/lib/compute");
+  const result = await computeFiling("FL", "pact", "2026-08");
+  assert.equal(result.taxType, "pact");
+  if (result.taxType !== "pact") return;
+
+  assert.equal(result.source, "shipments", "once orders exist they are the source of truth");
+  assert.ok(result.shipmentCount >= 2);
+  assert.ok(
+    result.rows.every((r) => r.customerName),
+    "every reported shipment now has the customer name PACT requires",
+  );
+  assert.equal(
+    result.warnings.some((w) => w.includes("customer names")),
+    false,
+    "and the missing-customer warning is gone",
+  );
+});
+
+test("many stores can be connected, each keeping its own catalog and orders", async () => {
+  const { db } = await import("../src/db");
+  const { eq } = await import("drizzle-orm");
+  const { listConnections, slugify } = await import("../src/lib/medusa/sync");
+
+  assert.equal(slugify("MIA Tyson Vape Deals"), "mia-tyson-vape-deals");
+  assert.equal(slugify("https://vapecloseouts.com/"), "vapecloseouts-com");
+
+  await db.insert(schema.integrations).values([
+    { slug: "mia", name: "MIA Tyson", baseUrl: "https://mia.example.com", status: "ok" },
+    { slug: "vapecloseouts", name: "Vape Closeouts", baseUrl: "https://vc.example.com", status: "ok" },
+  ]);
+
+  const all = await listConnections();
+  assert.equal(all.length, 2);
+  assert.ok(all.every((c) => !("secret" in c)), "a secret is never returned to a caller");
+
+  // A store's rows are scoped to it, so removing one cannot disturb the other.
+  const [mia] = await db.select().from(schema.integrations).where(eq(schema.integrations.slug, "mia"));
+  await db.insert(schema.medusaProducts).values({
+    integrationId: mia.id, variantId: "mia:v1", sku: "X1", productTitle: "Thing",
+  });
+  await db.delete(schema.integrations).where(eq(schema.integrations.slug, "mia"));
+  const orphans = await db.select().from(schema.medusaProducts).where(eq(schema.medusaProducts.variantId, "mia:v1"));
+  assert.equal(orphans.length, 0, "its catalog goes with it");
+
+  const remaining = await listConnections();
+  assert.equal(remaining.length, 1);
+  assert.equal(remaining[0].slug, "vapecloseouts");
+});

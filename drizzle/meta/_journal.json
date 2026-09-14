@@ -43,6 +43,13 @@
       "when": 1789378767722,
       "tag": "0005_awesome_proudstar",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1789386439209,
+      "tag": "0006_overconfident_calypso",
+      "breakpoints": true
     }
   ]
 }

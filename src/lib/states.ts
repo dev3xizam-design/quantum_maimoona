@@ -16,3 +16,13 @@ export const STATE_NAMES: Record<string, string> = {
 export function stateName(code: string): string {
   return STATE_NAMES[code] ?? code;
 }
+
+const BY_NAME = new Map(Object.entries(STATE_NAMES).map(([code, name]) => [name.toUpperCase(), code]));
+
+/** Orders carry "FL" or "Florida" depending on how checkout was filled in. */
+export function normalizeState(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const s = raw.trim().toUpperCase();
+  if (s.length === 2 && STATE_NAMES[s]) return s;
+  return BY_NAME.get(s) ?? (s.length === 2 && /^[A-Z]{2}$/.test(s) ? s : null);
+}

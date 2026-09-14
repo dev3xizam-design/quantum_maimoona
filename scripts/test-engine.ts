@@ -635,3 +635,107 @@ test("the candidate index narrows the field without losing the right answer", as
   assert.ok(shortlist.some((c) => c.key === "A"), "the real match survives the shortlist");
   assert.equal(shortlist.some((c) => c.key === "B"), false, "unrelated products are skipped");
 });
+
+/* ------------------------------------------------------------------ */
+/* Order feeds for PACT                                                */
+/* ------------------------------------------------------------------ */
+
+test("Shopify's blank header rows are carried down, not read as blanks", async () => {
+  const { parseShopifyOrders } = await import("../src/lib/ingest/shopify");
+
+  // Exactly how Shopify writes it: the address appears once, on line 1 of the
+  // order. Rows 2 and 3 belong to the same order but have empty header cells.
+  const headers = [
+    "Name", "Email", "Created at", "Financial Status", "Lineitem quantity",
+    "Lineitem name", "Lineitem sku", "Shipping Name", "Shipping Address1",
+    "Shipping City", "Shipping Zip", "Shipping Province", "Shipping Country",
+  ];
+  const records = [
+    {
+      Name: "#1001", Email: "a@b.c", "Created at": "2026-03-14 10:02:00 -0400",
+      "Financial Status": "paid", "Lineitem quantity": "2",
+      "Lineitem name": "Suorin Air Pro Pod", "Lineitem sku": "SKU-1",
+      "Shipping Name": "Jane Doe", "Shipping Address1": "12 Oak St",
+      "Shipping City": "Tampa", "Shipping Zip": "33601",
+      "Shipping Province": "FL", "Shipping Country": "United States",
+    },
+    {
+      Name: "", Email: "", "Created at": "", "Financial Status": "",
+      "Lineitem quantity": "1", "Lineitem name": "Suorin Fero Pod",
+      "Lineitem sku": "SKU-2", "Shipping Name": "", "Shipping Address1": "",
+      "Shipping City": "", "Shipping Zip": "", "Shipping Province": "", "Shipping Country": "",
+    },
+    {
+      Name: "#1002", Email: "c@d.e", "Created at": "2026-04-02", "Financial Status": "paid",
+      "Lineitem quantity": "3", "Lineitem name": "Geek Bar", "Lineitem sku": "SKU-3",
+      "Shipping Name": "John Roe", "Shipping Address1": "9 Elm Rd",
+      "Shipping City": "Austin", "Shipping Zip": "73301",
+      "Shipping Province": "Texas", "Shipping Country": "US",
+    },
+  ];
+
+  const r = parseShopifyOrders(records, headers, "vape-closeouts");
+  assert.equal(r.rows.length, 3);
+  assert.equal(r.orders, 2);
+
+  // The second line inherits the first line's order and address.
+  const second = r.rows[1];
+  assert.equal(second.orderNumber, "#1001");
+  assert.equal(second.customerName, "Jane Doe");
+  assert.equal(second.shipToAddress, "12 Oak St");
+  assert.equal(second.shipToCity, "Tampa");
+  assert.equal(second.state, "FL");
+  assert.equal(second.period, "2026-03");
+  assert.equal(second.product, "Suorin Fero Pod", "but keeps its own line item");
+  assert.notEqual(second.externalId, r.rows[0].externalId, "each line is addressable");
+
+  // A full state name resolves to its code.
+  assert.equal(r.rows[2].state, "TX");
+  assert.deepEqual(r.periods, ["2026-03", "2026-04"]);
+});
+
+test("Shopify rows that cannot be filed are counted, never guessed at", async () => {
+  const { parseShopifyOrders } = await import("../src/lib/ingest/shopify");
+  const headers = [
+    "Name", "Created at", "Financial Status", "Lineitem quantity", "Lineitem name",
+    "Shipping Province", "Shipping Country",
+  ];
+  const base = { "Lineitem quantity": "1", "Lineitem name": "X", "Created at": "2026-05-01" };
+  const r = parseShopifyOrders(
+    [
+      { ...base, Name: "#1", "Financial Status": "paid", "Shipping Province": "ON", "Shipping Country": "Canada" },
+      { ...base, Name: "#2", "Financial Status": "refunded", "Shipping Province": "FL", "Shipping Country": "US" },
+      { ...base, Name: "#3", "Financial Status": "paid", "Shipping Province": "", "Shipping Country": "US" },
+      { ...base, Name: "#4", "Financial Status": "paid", "Shipping Province": "NV", "Shipping Country": "US" },
+    ],
+    headers,
+    "site",
+  );
+
+  assert.equal(r.rows.length, 1, "only the filable one is kept");
+  assert.equal(r.rows[0].state, "NV");
+  assert.equal(r.skippedNonUs, 1);
+  assert.equal(r.skippedRefunded, 1);
+  assert.equal(r.skippedNoState, 1);
+});
+
+test("a Shopify export missing its address columns is refused, not half-imported", async () => {
+  const { parseShopifyOrders } = await import("../src/lib/ingest/shopify");
+  const r = parseShopifyOrders(
+    [{ Name: "#1", "Lineitem quantity": "1" }],
+    ["Name", "Lineitem quantity"],
+    "site",
+  );
+  assert.deepEqual(r.missingColumns, ["shippingProvince"]);
+  assert.equal(r.rows.length, 0);
+});
+
+test("state names and codes both resolve", async () => {
+  const { normalizeState } = await import("../src/lib/states");
+  assert.equal(normalizeState("FL"), "FL");
+  assert.equal(normalizeState("florida"), "FL");
+  assert.equal(normalizeState("New Hampshire"), "NH");
+  assert.equal(normalizeState("District of Columbia"), "DC");
+  assert.equal(normalizeState(""), null);
+  assert.equal(normalizeState("Ontario"), null, "a Canadian province is not a US state");
+});

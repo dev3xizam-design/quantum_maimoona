@@ -8,6 +8,7 @@ const TABS = [
   { href: "/upload/products", label: "Product master" },
   { href: "/upload/purchases", label: "Purchases" },
   { href: "/upload/shipments", label: "PACT shipments" },
+  { href: "/upload/shopify", label: "Shopify orders" },
   { href: "/upload/history", label: "History" },
 ];
 

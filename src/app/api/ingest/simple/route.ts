@@ -38,7 +38,7 @@ export async function POST(req: Request) {
   if (!Array.isArray(rows) || rows.length === 0) {
     return NextResponse.json({ error: "No rows found in that file." }, { status: 400 });
   }
-  if (!["products", "purchases", "shipments"].includes(String(kind))) {
+  if (!["products", "purchases", "shipments", "shopify_orders"].includes(String(kind))) {
     return NextResponse.json({ error: `Unknown upload kind "${kind}".` }, { status: 400 });
   }
 

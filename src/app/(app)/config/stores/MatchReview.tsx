@@ -31,7 +31,7 @@ export function MatchReview({ rows }: { rows: MatchRow[] }) {
       <table className="qtable">
         <thead>
           <tr>
-            <th>Medusa product</th>
+            <th>Store product</th>
             <th>Matched to (from Avalara)</th>
             <th className="num">Confidence</th>
             <th></th>
@@ -40,7 +40,7 @@ export function MatchReview({ rows }: { rows: MatchRow[] }) {
         <tbody>
           {rows.map((r) => (
             <tr key={r.id}>
-              <td className="max-w-[330px]">
+              <td className="max-w-[320px]">
                 <div className="truncate">
                   {[r.productTitle, r.variantTitle].filter(Boolean).join(" · ") || "—"}
                 </div>
@@ -48,35 +48,21 @@ export function MatchReview({ rows }: { rows: MatchRow[] }) {
                   {r.sku ?? "no sku"} · {r.barcode ?? "no barcode"}
                 </div>
               </td>
-              <td className="max-w-[330px]">
+              <td className="max-w-[320px]">
                 <div className="truncate">{r.matchedDescription ?? "—"}</div>
                 <div className="font-mono text-[10.5px] text-[var(--muted)]">{r.matchedSku}</div>
               </td>
               <td className="num">
-                <span
-                  className={`badge ${
-                    (r.matchScore ?? 0) >= 0.85 ? "badge-filed" : "badge-not_started"
-                  }`}
-                >
+                <span className={`badge ${(r.matchScore ?? 0) >= 0.85 ? "badge-filed" : "badge-not_started"}`}>
                   {r.matchScore !== null ? `${Math.round(r.matchScore * 100)}%` : "exact"}
                 </span>
               </td>
               <td>
                 <div className="flex gap-1.5">
-                  <button
-                    className="btn btn-sm"
-                    disabled={pending}
-                    onClick={() => decide(r.id, "accept")}
-                    title="Keep this match and stop flagging it"
-                  >
+                  <button className="btn btn-sm" disabled={pending} onClick={() => decide(r.id, "accept")}>
                     Confirm
                   </button>
-                  <button
-                    className="btn btn-sm btn-danger"
-                    disabled={pending}
-                    onClick={() => decide(r.id, "reject")}
-                    title="Wrong product - never match this variant again"
-                  >
+                  <button className="btn btn-sm btn-danger" disabled={pending} onClick={() => decide(r.id, "reject")}>
                     Reject
                   </button>
                 </div>
@@ -86,8 +72,7 @@ export function MatchReview({ rows }: { rows: MatchRow[] }) {
         </tbody>
       </table>
       <p className="mt-2 text-[11.5px] text-[var(--muted)]">
-        Rejecting is permanent — a later sync will not re-match that variant. Confirming keeps the
-        match and marks it as yours, so it stops appearing here.
+        Rejecting is permanent — a later sync will not re-match that variant.
       </p>
     </div>
   );

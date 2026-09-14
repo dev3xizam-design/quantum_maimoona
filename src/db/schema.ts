@@ -289,6 +289,15 @@ export const shipments = pgTable(
   {
     id: serial("id").primaryKey(),
     uploadId: integer("upload_id").references(() => uploads.id, { onDelete: "cascade" }),
+    integrationId: integer("integration_id").references(() => integrations.id, {
+      onDelete: "set null",
+    }),
+    /** medusa | shopify_csv | upload - so a re-sync replaces only its own rows. */
+    sourceSystem: text("source_system").notNull().default("upload"),
+    sourceLabel: text("source_label"),
+    /** `${source}:${store}:${orderId}:${lineId}` - makes every sync idempotent. */
+    externalId: text("external_id"),
+    orderNumber: text("order_number"),
     period: text("period").notNull(),
     state: text("state").notNull(),
     customerName: text("customer_name"),
@@ -304,7 +313,11 @@ export const shipments = pgTable(
     mlTotal: numeric("ml_total", { precision: 18, scale: 4 }).notNull().default("0"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index("ship_period_state_idx").on(t.period, t.state)],
+  (t) => [
+    index("ship_period_state_idx").on(t.period, t.state),
+    index("ship_source_idx").on(t.sourceSystem, t.integrationId),
+    uniqueIndex("ship_external_idx").on(t.externalId),
+  ],
 );
 
 /* ------------------------------------------------------------------ */
@@ -416,7 +429,10 @@ export const integrations = pgTable(
   "integrations",
   {
     id: serial("id").primaryKey(),
-    provider: text("provider").notNull(), // medusa
+    /** Stable handle used in URLs and to key synced rows. */
+    slug: text("slug").notNull(),
+    name: text("name").notNull(),
+    provider: text("provider").notNull().default("medusa"), // medusa | shopify
     baseUrl: text("base_url").notNull(),
     secretCipher: text("secret_cipher"),
     secretLast4: text("secret_last4"),
@@ -426,10 +442,17 @@ export const integrations = pgTable(
     lastTestedAt: timestamp("last_tested_at", { withTimezone: true }),
     lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),
     stats: jsonb("stats").$type<Record<string, unknown>>(),
+    /** Orders from this store feed the PACT report. */
+    syncOrders: boolean("sync_orders").notNull().default(true),
+    /** Its catalog feeds cost / mL / open-closed. */
+    syncCatalog: boolean("sync_catalog").notNull().default(true),
+    active: boolean("active").notNull().default(true),
+    ordersSyncedAt: timestamp("orders_synced_at", { withTimezone: true }),
+    orderStats: jsonb("order_stats").$type<Record<string, unknown>>(),
     updatedBy: text("updated_by"),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [uniqueIndex("integration_provider_idx").on(t.provider)],
+  (t) => [uniqueIndex("integration_slug_idx").on(t.slug)],
 );
 
 /**
@@ -442,6 +465,9 @@ export const medusaProducts = pgTable(
   "medusa_products",
   {
     id: serial("id").primaryKey(),
+    integrationId: integer("integration_id").references(() => integrations.id, {
+      onDelete: "cascade",
+    }),
     variantId: text("variant_id").notNull(),
     productId: text("product_id"),
     productTitle: text("product_title"),

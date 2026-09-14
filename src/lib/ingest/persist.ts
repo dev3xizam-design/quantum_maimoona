@@ -208,6 +208,10 @@ export async function insertPurchases(uploadId: number, rows: PurchaseInput[]) {
 export type ShipmentInput = {
   period: string;
   state: string;
+  externalId?: string | null;
+  orderNumber?: string | null;
+  sourceSystem?: string;
+  sourceLabel?: string | null;
   customerName?: string | null;
   shipToAddress?: string | null;
   shipToCity?: string | null;
@@ -221,27 +225,60 @@ export type ShipmentInput = {
   mlTotal?: number;
 };
 
+/**
+ * Upserted on externalId so re-importing the same orders corrects rows instead
+ * of duplicating them - a doubled PACT filing would misreport every shipment.
+ */
 export async function insertShipments(uploadId: number, rows: ShipmentInput[]) {
   if (!rows.length) return 0;
-  const values =
-    rows.map((r) => ({
-      uploadId,
-      period: r.period,
-      state: r.state.toUpperCase(),
-      customerName: r.customerName ?? null,
-      shipToAddress: r.shipToAddress ?? null,
-      shipToCity: r.shipToCity ?? null,
-      shipToState: r.shipToState ?? null,
-      shipToZip: r.shipToZip ?? null,
-      invoiceDate: r.invoiceDate ?? null,
-      invoiceNumber: r.invoiceNumber ?? null,
-      product: r.product ?? null,
-      brand: r.brand ?? null,
-      quantity: n(r.quantity ?? 0),
-      mlTotal: n(r.mlTotal ?? 0),
-    }));
-  for (let i = 0; i < values.length; i += INSERT_CHUNK) {
-    await db.insert(shipments).values(values.slice(i, i + INSERT_CHUNK));
+  const values = rows.map((r) => ({
+    uploadId,
+    sourceSystem: r.sourceSystem ?? "upload",
+    sourceLabel: r.sourceLabel ?? null,
+    externalId: r.externalId ?? null,
+    orderNumber: r.orderNumber ?? null,
+    period: r.period,
+    state: r.state.toUpperCase(),
+    customerName: r.customerName ?? null,
+    shipToAddress: r.shipToAddress ?? null,
+    shipToCity: r.shipToCity ?? null,
+    shipToState: r.shipToState ?? null,
+    shipToZip: r.shipToZip ?? null,
+    invoiceDate: r.invoiceDate ?? null,
+    invoiceNumber: r.invoiceNumber ?? null,
+    product: r.product ?? null,
+    brand: r.brand ?? null,
+    quantity: n(r.quantity ?? 0),
+    mlTotal: n(r.mlTotal ?? 0),
+  }));
+
+  const withId = values.filter((v) => v.externalId);
+  const withoutId = values.filter((v) => !v.externalId);
+
+  for (let i = 0; i < withId.length; i += INSERT_CHUNK) {
+    await db
+      .insert(shipments)
+      .values(withId.slice(i, i + INSERT_CHUNK))
+      .onConflictDoUpdate({
+        target: shipments.externalId,
+        set: {
+          period: dsql`excluded.period`,
+          state: dsql`excluded.state`,
+          customerName: dsql`excluded.customer_name`,
+          shipToAddress: dsql`excluded.ship_to_address`,
+          shipToCity: dsql`excluded.ship_to_city`,
+          shipToState: dsql`excluded.ship_to_state`,
+          shipToZip: dsql`excluded.ship_to_zip`,
+          invoiceDate: dsql`excluded.invoice_date`,
+          invoiceNumber: dsql`excluded.invoice_number`,
+          product: dsql`excluded.product`,
+          quantity: dsql`excluded.quantity`,
+          mlTotal: dsql`excluded.ml_total`,
+        },
+      });
+  }
+  for (let i = 0; i < withoutId.length; i += INSERT_CHUNK) {
+    await db.insert(shipments).values(withoutId.slice(i, i + INSERT_CHUNK));
   }
   return rows.length;
 }
