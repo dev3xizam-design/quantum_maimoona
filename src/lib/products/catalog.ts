@@ -197,7 +197,7 @@ export async function refreshProductCatalog(): Promise<CatalogRefreshResult> {
       : c.containsNicotine;
 
     const missing: string[] = [];
-    if (containsNicotine) {
+    if (containsNicotine && !c.isNonProduct) {
       if (wholesaleCost === null) missing.push("wholesale cost");
       if (systemType === null) missing.push("open/closed");
       if (liquidMl === null) missing.push("mL");
@@ -240,6 +240,9 @@ export async function refreshProductCatalog(): Promise<CatalogRefreshResult> {
       classificationNote: classificationSummary(c),
       lockedFields: prior?.lockedFields ?? [],
       needsReview,
+      // A rebuild refreshes the facts; it never un-reviews what a person read.
+      reviewedAt: prior?.reviewedAt ?? null,
+      reviewedBy: prior?.reviewedBy ?? null,
       updatedAt: new Date(),
     });
   }
@@ -273,6 +276,8 @@ export async function refreshProductCatalog(): Promise<CatalogRefreshResult> {
           systemTypeSource: dsql`excluded.system_type_source`,
           classificationNote: dsql`excluded.classification_note`,
           needsReview: dsql`excluded.needs_review`,
+          reviewedAt: dsql`excluded.reviewed_at`,
+          reviewedBy: dsql`excluded.reviewed_by`,
           updatedAt: dsql`excluded.updated_at`,
         },
       });

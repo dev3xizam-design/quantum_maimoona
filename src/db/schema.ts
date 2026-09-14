@@ -251,7 +251,16 @@ export const products = pgTable("products", {
   classificationNote: text("classification_note"),
 
   lockedFields: jsonb("locked_fields").$type<string[]>().default([]),
+  /** Derived fact: something the excise engines need is missing. */
   needsReview: boolean("needs_review").notNull().default(false),
+  /**
+   * A person's acknowledgement, kept SEPARATE from needsReview. Reviewing a SKU
+   * says "I have looked at this", not "the data is now complete" - the gap is
+   * still reported to excise, and the Missing cost / Missing mL tabs still
+   * count it. Otherwise a bulk review would quietly hide an understated return.
+   */
+  reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+  reviewedBy: text("reviewed_by"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

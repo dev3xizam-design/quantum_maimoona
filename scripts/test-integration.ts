@@ -544,3 +544,71 @@ test("a month is stored as a thing in its own right, with a row per state", asyn
   assert.equal(closed!.status, "closed");
   assert.ok(closed!.closedAt, "closing records when");
 });
+
+test("marking reviewed acknowledges a gap without hiding it", async () => {
+  const { db } = await import("../src/db");
+  const { eq, and, isNull } = await import("drizzle-orm");
+  const { refreshProductCatalog } = await import("../src/lib/products/catalog");
+
+  await refreshProductCatalog();
+
+  // A SKU with no wholesale cost genuinely needs review.
+  const [before] = await db.select().from(schema.products).where(eq(schema.products.sku, "JUICE-1"));
+  const gapped = before.wholesaleCost === null;
+
+  // Reviewing everything outstanding, the way the button does.
+  const now = new Date();
+  await db
+    .update(schema.products)
+    .set({ reviewedAt: now, reviewedBy: "tester@example.com" })
+    .where(and(eq(schema.products.needsReview, true), isNull(schema.products.reviewedAt)));
+
+  const reviewed = await db.select().from(schema.products);
+  for (const p of reviewed.filter((x) => x.needsReview)) {
+    assert.ok(p.reviewedAt, "everything outstanding is acknowledged");
+    assert.equal(
+      p.wholesaleCost === null || p.liquidMl === null || p.systemType === null,
+      true,
+      "the gap itself is untouched - review does not fabricate data",
+    );
+  }
+  void gapped;
+
+  // And a rebuild must not silently un-review them.
+  await refreshProductCatalog();
+  const after = await db.select().from(schema.products).where(eq(schema.products.sku, "JUICE-1"));
+  if (after[0].needsReview) {
+    assert.ok(after[0].reviewedAt, "a rebuild keeps the person's acknowledgement");
+  }
+});
+
+test("shipping lines stop demanding excise data once reclassified", async () => {
+  const { db } = await import("../src/db");
+  const { eq } = await import("drizzle-orm");
+  const { insertTransactions } = await import("../src/lib/ingest/persist");
+  const { refreshProductCatalog } = await import("../src/lib/products/catalog");
+
+  const [upload] = await db
+    .insert(schema.uploads)
+    .values({ filename: "ship.csv", kind: "avalara" })
+    .returning({ id: schema.uploads.id });
+
+  await insertTransactions(upload.id, [
+    {
+      documentId: "S1", lineNo: "9", ref1: null, documentStatus: "Committed",
+      docType: "Sales Invoice", sign: 1, documentDate: "2026-08-02", period: "2026-08",
+      reportingDate: null, taxCalcDate: null, state: "FL", destCounty: "Main",
+      destCity: "Metro", destZip: "33101", jurisdictionType: "State",
+      jurisdictionDescription: "FLORIDA", taxTypeDescription: "Sales", rate: 0.06,
+      lineAmount: 9.99, discountAmount: 0, taxableAmount: 9.99, exemptAmount: 0,
+      taxAmount: 0.6, quantity: 1, itemCode: "SHIPPING",
+      itemDescription: "SHIPPING AND HANDLING FEE", sourceFile: "ship.csv",
+    },
+  ]);
+
+  await refreshProductCatalog();
+  const [shipping] = await db.select().from(schema.products).where(eq(schema.products.sku, "SHIPPING"));
+  assert.ok(shipping, "it is still catalogued - it is real revenue");
+  assert.equal(shipping.containsNicotine, false);
+  assert.equal(shipping.needsReview, false, "a shipping charge has no wholesale cost or mL to find");
+});

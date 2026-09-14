@@ -490,3 +490,26 @@ test("a session is a week long and refreshes once it is past half its life", asy
   assert.equal(await verifySession("not-a-token"), null);
   assert.equal(await verifySession(""), null);
 });
+
+test("shipping, fees and gift cards are not treated as merchandise", async () => {
+  const { classifyProduct } = await import("../src/lib/products/classify");
+
+  for (const name of [
+    "SHIPPING AND HANDLING FEE",
+    "Package Protection",
+    "Route Shipping Protection",
+    "Gift Card $50",
+    "Adult Signature Required",
+    "Order Discount",
+  ]) {
+    const c = classifyProduct(name);
+    assert.equal(c.isNonProduct, true, `${name} should not be merchandise`);
+    assert.equal(c.containsNicotine, false, `${name} should not be a nicotine product`);
+  }
+
+  // A real product with the word "protection" nowhere near it is unaffected.
+  const real = classifyProduct("Naked 100 Lava Flow 60ML E-Liquid");
+  assert.equal(real.isNonProduct, false);
+  assert.equal(real.containsNicotine, true);
+  assert.equal(real.systemType, "OPEN");
+});

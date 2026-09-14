@@ -17,6 +17,8 @@ export type Classification = {
   containsNicotine: boolean;
   nicotineEvidence: string | null;
   isHardware: boolean;
+  /** Shipping, fees, gift cards - present on invoices, not merchandise. */
+  isNonProduct: boolean;
 };
 
 /** Words that mean a sealed, pre-filled device: a CLOSED system. */
@@ -41,6 +43,19 @@ const HARDWARE_TERMS = [
 
 const NON_NICOTINE_TERMS = ["zero nicotine", "0mg", "0 mg", "nicotine free", "nicotine-free", "cbd", "hemp"];
 
+/**
+ * Line items that are not merchandise at all. They still appear on every sale
+ * line, so without this they sit in the catalog demanding a wholesale cost and
+ * an mL volume that will never exist.
+ */
+const NON_PRODUCT_TERMS = [
+  "shipping", "handling", "freight", "delivery charge", "package protection",
+  "route protection", "shipping protection", "insurance", "adult signature",
+  "signature required", "gift card", "gift certificate", "store credit",
+  "discount", "coupon", "rounding", "surcharge", "processing fee",
+  "convenience fee", "restocking", "donation", "tip",
+];
+
 function findTerm(haystack: string, terms: string[]): string | null {
   for (const t of terms) {
     if (haystack.includes(t)) return t;
@@ -62,6 +77,7 @@ export function classifyProduct(name: string | null | undefined, sku?: string | 
     containsNicotine: true,
     nicotineEvidence: null,
     isHardware: false,
+    isNonProduct: false,
   };
 
   if (!raw) return out;
@@ -87,6 +103,15 @@ export function classifyProduct(name: string | null | undefined, sku?: string | 
       out.cartridgesPerUnit = v;
       out.packEvidence = packMatch[0].trim();
     }
+  }
+
+  /* ---- Not merchandise ------------------------------------------------ */
+  const nonProduct = findTerm(s, NON_PRODUCT_TERMS);
+  if (nonProduct) {
+    out.isNonProduct = true;
+    out.containsNicotine = false;
+    out.nicotineEvidence = `"${nonProduct}" - a charge or fee, not merchandise`;
+    return out;
   }
 
   /* ---- Hardware ------------------------------------------------------- */

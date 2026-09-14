@@ -23,6 +23,7 @@ export type ProductView = {
   classificationNote: string | null;
   lockedFields: string[];
   needsReview: boolean;
+  reviewedAt: string | null;
 };
 
 const money = (n: number | null) =>
@@ -53,11 +54,18 @@ export function ProductRow({
 }) {
   return (
     <>
-      <tr className={p.needsReview ? "bg-amber-50/40" : ""}>
+      <tr className={p.needsReview && !p.reviewedAt ? "flagged" : ""}>
         <td>
           <input type="checkbox" checked={selected} onChange={() => onToggle(p.id)} />
         </td>
-        <td className="font-mono text-[11px] font-semibold">{p.sku}</td>
+        <td className="font-mono text-[11px] font-semibold">
+          {p.sku}
+          {p.reviewedAt && (
+            <div className="mt-0.5">
+              <span className="badge badge-filed">reviewed</span>
+            </div>
+          )}
+        </td>
         <td className="max-w-[300px]">
           <div className="truncate">{p.description ?? "—"}</div>
           <div className="text-[10px] text-[var(--muted)]">

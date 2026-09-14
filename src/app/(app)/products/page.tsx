@@ -47,9 +47,22 @@ export default async function ProductsPage() {
     classificationNote: p.classificationNote,
     lockedFields: p.lockedFields ?? [],
     needsReview: p.needsReview,
+    reviewedAt: p.reviewedAt ? p.reviewedAt.toISOString().slice(0, 10) : null,
   }));
 
   const nicotine = view.filter((p) => p.containsNicotine);
+  const sold = view.filter((p) => p.unitsSold !== 0);
+  const neverSold = view.filter((p) => p.unitsSold === 0);
+  const soldWithCost = sold.filter((p) => p.wholesaleCost !== null).length;
+  /**
+   * A master full of costed SKUs that have never been sold, next to sold SKUs
+   * with no cost, means the two files key products differently - the cost data
+   * exists but will never reach a return.
+   */
+  const skuMismatch =
+    sold.length > 0 &&
+    soldWithCost === 0 &&
+    neverSold.filter((p) => p.wholesaleCost !== null).length > 20;
   const totalRevenue = view.reduce((s, p) => s + p.revenue, 0);
   const missingCost = nicotine.filter((p) => p.wholesaleCost === null);
   const missingCostRevenue = missingCost.reduce((s, p) => s + p.revenue, 0);
@@ -87,6 +100,25 @@ export default async function ProductsPage() {
           tone={view.some((p) => p.needsReview) ? "warn" : "ok"}
           sub="listed first in the tabs above"
         />
+      </div>
+
+      {skuMismatch && (
+        <div className="callout callout-warn">
+          <strong>Your product master and the Avalara export do not use the same SKUs.</strong>{" "}
+          {neverSold.filter((p) => p.wholesaleCost !== null).length.toLocaleString()} SKUs in the
+          catalog have a wholesale cost but have never appeared on a sale, while all{" "}
+          {sold.length.toLocaleString()} SKUs that did sell have no cost at all. The cost data is
+          loaded, it just cannot be matched — so every percentage-of-wholesale excise return is
+          still understated. Re-export the master keyed on the same item code Avalara reports (the
+          sold SKUs look like barcodes), or add that code as the <code>sku</code> column.
+        </div>
+      )}
+
+      <div className="help">
+        <strong>Reviewed means read, not fixed.</strong> Marking a SKU reviewed records that you
+        have looked at it. It does <em>not</em> fill in the missing wholesale cost or mL — the
+        Missing cost and Missing mL tabs keep counting it, and the excise return keeps reporting
+        that it is understated. Use it to clear the noise once you have decided a gap is acceptable.
       </div>
 
       <div className="help">

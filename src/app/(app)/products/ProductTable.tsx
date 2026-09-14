@@ -1,17 +1,30 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { bulkSetSystemType, rebuildCatalog } from "@/app/actions/products";
+import { useRouter } from "next/navigation";
+import {
+  bulkSetSystemType,
+  clearReviewed,
+  markNonProduct,
+  markReviewed,
+  rebuildCatalog,
+} from "@/app/actions/products";
 import { ProductRow, type ProductView } from "./ProductRow";
 
-type Filter = "all" | "review" | "cost" | "ml" | "system";
+type Filter = "all" | "review" | "cost" | "ml" | "system" | "reviewed";
 
-const FILTERS: { key: Filter; label: string; match: (p: ProductView) => boolean }[] = [
+/**
+ * "Needs review" excludes anything a person has already acknowledged. The
+ * Missing cost / Missing mL counts do NOT - those are facts about the data and
+ * stay true whether or not somebody has read them.
+ */
+const FILTERS: { key: Filter; label: string; match: (p: ProductView) => boolean; tone?: "warn" }[] = [
   { key: "all", label: "All", match: () => true },
-  { key: "review", label: "Needs review", match: (p) => p.needsReview },
-  { key: "cost", label: "Missing cost", match: (p) => p.containsNicotine && p.wholesaleCost === null },
-  { key: "ml", label: "Missing mL", match: (p) => p.containsNicotine && p.liquidMl === null },
-  { key: "system", label: "No open/closed", match: (p) => p.containsNicotine && p.systemType === null },
+  { key: "review", label: "Needs review", match: (p) => p.needsReview && !p.reviewedAt, tone: "warn" },
+  { key: "cost", label: "Missing cost", match: (p) => p.containsNicotine && p.wholesaleCost === null, tone: "warn" },
+  { key: "ml", label: "Missing mL", match: (p) => p.containsNicotine && p.liquidMl === null, tone: "warn" },
+  { key: "system", label: "No open/closed", match: (p) => p.containsNicotine && p.systemType === null, tone: "warn" },
+  { key: "reviewed", label: "Reviewed", match: (p) => Boolean(p.reviewedAt) },
 ];
 
 export function ProductTable({ products }: { products: ProductView[] }) {
@@ -19,6 +32,7 @@ export function ProductTable({ products }: { products: ProductView[] }) {
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [pending, start] = useTransition();
+  const router = useRouter();
   const [msg, setMsg] = useState<string | null>(null);
 
   const rows = useMemo(() => {
@@ -36,6 +50,48 @@ export function ProductTable({ products }: { products: ProductView[] }) {
       const next = new Set(prev);
       next.has(id) ? next.delete(id) : next.add(id);
       return next;
+    });
+
+  const outstanding = products.filter((p) => p.needsReview && !p.reviewedAt).length;
+  const reviewedCount = products.filter((p) => p.reviewedAt).length;
+
+  const reviewAll = () =>
+    start(async () => {
+      const fd = new FormData();
+      fd.set("scope", "needs_review");
+      const res = await markReviewed(fd);
+      setMsg(
+        `Marked ${res.count.toLocaleString()} SKU(s) reviewed. The missing data is still reported to excise — this only records that you have read them.`,
+      );
+      router.refresh();
+    });
+
+  const undoReviewed = () =>
+    start(async () => {
+      const res = await clearReviewed();
+      setMsg(`Cleared the reviewed mark on ${res.count.toLocaleString()} SKU(s).`);
+      router.refresh();
+    });
+
+  const reviewSelected = () =>
+    start(async () => {
+      const fd = new FormData();
+      fd.set("scope", "selected");
+      fd.set("ids", [...selected].join(","));
+      const res = await markReviewed(fd);
+      setSelected(new Set());
+      setMsg(`Marked ${res.count.toLocaleString()} selected SKU(s) reviewed.`);
+      router.refresh();
+    });
+
+  const notMerchandise = () =>
+    start(async () => {
+      const fd = new FormData();
+      fd.set("ids", [...selected].join(","));
+      await markNonProduct(fd);
+      setSelected(new Set());
+      setMsg("Marked as not nicotine merchandise — they no longer ask for cost or mL.");
+      router.refresh();
     });
 
   const rebuild = () =>
@@ -77,6 +133,16 @@ export function ProductTable({ products }: { products: ProductView[] }) {
               onChange={(e) => setQuery(e.target.value)}
               className="max-w-[240px]"
             />
+            {outstanding > 0 && (
+              <button className="btn btn-primary" disabled={pending} onClick={reviewAll}>
+                Mark all {outstanding.toLocaleString()} as reviewed
+              </button>
+            )}
+            {reviewedCount > 0 && (
+              <button className="btn btn-sm btn-ghost" disabled={pending} onClick={undoReviewed}>
+                Undo reviewed
+              </button>
+            )}
             <button className="btn" disabled={pending} onClick={rebuild}>
               {pending ? "Working…" : "Rebuild catalog"}
             </button>
@@ -94,7 +160,7 @@ export function ProductTable({ products }: { products: ProductView[] }) {
                 data-active={filter === f.key}
               >
                 {f.label}
-                <span className="tab-count" data-tone={f.key !== "all" && count > 0 ? "warn" : undefined}>
+                <span className="tab-count" data-tone={f.tone && count > 0 ? "warn" : undefined}>
                   {count}
                 </span>
               </button>
@@ -111,6 +177,12 @@ export function ProductTable({ products }: { products: ProductView[] }) {
           </button>
           <button className="btn btn-sm" disabled={pending} onClick={() => bulk("CLOSED")}>
             Mark CLOSED
+          </button>
+          <button className="btn btn-sm" disabled={pending} onClick={reviewSelected}>
+            Mark reviewed
+          </button>
+          <button className="btn btn-sm" disabled={pending} onClick={notMerchandise}>
+            Not merchandise
           </button>
           <button className="btn btn-sm" onClick={() => setSelected(new Set())}>
             Clear
