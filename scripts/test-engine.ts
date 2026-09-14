@@ -465,3 +465,28 @@ test("destination-county tax is not inflated by other destinations", () => {
   assert.equal(alpha.rate, 0.055);
   assert.equal(beta.rate, 0.085);
 });
+
+/* ------------------------------------------------------------------ */
+/* Session handling                                                    */
+/* ------------------------------------------------------------------ */
+
+test("a session is a week long and refreshes once it is past half its life", async () => {
+  process.env.AUTH_SECRET = "test-secret-that-is-long-enough-for-hs256";
+  const { signSession, verifySession, shouldRefresh, SESSION_MAX_AGE } = await import(
+    "../src/lib/session-token"
+  );
+
+  assert.equal(SESSION_MAX_AGE, 60 * 60 * 24 * 7, "a working week, not twelve hours");
+
+  const token = await signSession({ userId: 1, email: "a@b.c", name: "A", role: "admin" });
+  const verified = await verifySession(token);
+  assert.equal(verified?.session.email, "a@b.c");
+
+  const now = Math.floor(Date.now() / 1000);
+  assert.equal(shouldRefresh(now, now), false, "a fresh token is not re-issued");
+  assert.equal(shouldRefresh(now - 60 * 60 * 24 * 2, now), false, "two days in, still fine");
+  assert.equal(shouldRefresh(now - 60 * 60 * 24 * 5, now), true, "past half life, re-issue it");
+
+  assert.equal(await verifySession("not-a-token"), null);
+  assert.equal(await verifySession(""), null);
+});

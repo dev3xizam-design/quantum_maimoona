@@ -8,11 +8,13 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ state: string; taxType: string; period: string }> },
 ) {
   const session = await getSession();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  // A download is a browser navigation, so an expired session should land
+  // on the sign-in page rather than dumping raw JSON into the tab.
+  if (!session) return NextResponse.redirect(new URL("/login", req.url));
 
   const { state, taxType, period } = await params;
 

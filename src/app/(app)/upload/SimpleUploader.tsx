@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { FileDrop } from "@/components/FileDrop";
+import { ApiError, postJson } from "@/lib/api-client";
 import Papa from "papaparse";
 
 type Kind = "products" | "purchases" | "shipments";
@@ -56,6 +58,9 @@ const NUMERIC = new Set([
 
 const canon = (h: string) => h.toLowerCase().replace(/[^a-z0-9]/g, "");
 
+/** Rows per request. Keeps every batch well inside the body and time limits. */
+const BATCH = 400;
+
 export function SimpleUploader({
   kind,
   title,
@@ -70,10 +75,13 @@ export function SimpleUploader({
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [period, setPeriod] = useState("");
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+  const router = useRouter();
 
   async function handle(file: File) {
     setBusy(true);
     setMsg(null);
+    setProgress(null);
     try {
       const text = await file.text();
       const parsed = Papa.parse<Record<string, string>>(text, { header: true, skipEmptyLines: true });
@@ -90,9 +98,13 @@ export function SimpleUploader({
           }
         }
       }
-      if (kind === "products" && !map.sku) throw new Error("No SKU / item-code column found.");
+      if (kind === "products" && !map.sku) {
+        throw new Error(
+          `No SKU / item-code column found. The file's columns are: ${headers.slice(0, 12).join(", ")}`,
+        );
+      }
       if (kind !== "products" && !map.period && !period) {
-        throw new Error("No period column found - set the period above, or add a `period` column.");
+        throw new Error("No period column found — set the period above, or add a `period` column.");
       }
 
       const rows = parsed.data
@@ -101,7 +113,9 @@ export function SimpleUploader({
           for (const [field, header] of Object.entries(map)) {
             const v = raw[header];
             if (v === undefined || v === "") continue;
-            out[field] = NUMERIC.has(field) ? Number(String(v).replace(/[$,\s]/g, "")) || 0 : String(v).trim();
+            out[field] = NUMERIC.has(field)
+              ? Number(String(v).replace(/[$,\s]/g, "")) || 0
+              : String(v).trim();
           }
           if (!out.period && period) out.period = period;
           if (kind === "products" && out.systemType) {
@@ -111,18 +125,39 @@ export function SimpleUploader({
         })
         .filter((r) => Object.keys(r).length > 0);
 
-      const res = await fetch("/api/ingest/simple", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kind, filename: file.name, rows }),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "Upload failed");
-      setMsg({ ok: true, text: `Loaded ${json.count.toLocaleString()} row(s).` });
+      if (!rows.length) throw new Error("That file has no usable rows.");
+
+      /* Sent in batches: a large master would otherwise exceed the request
+         body limit, and a single huge write would exceed the time limit. */
+      let uploadId: number | undefined;
+      let stored = 0;
+      for (let i = 0; i < rows.length; i += BATCH) {
+        const batch = rows.slice(i, i + BATCH);
+        const res = await postJson<{ uploadId: number; count: number }>("/api/ingest/simple", {
+          kind,
+          filename: file.name,
+          rows: batch,
+          uploadId,
+        });
+        uploadId = res.uploadId;
+        stored += res.count;
+        setProgress({ done: Math.min(i + BATCH, rows.length), total: rows.length });
+      }
+      await postJson("/api/ingest/simple", { uploadId, done: true, total: stored });
+
+      setMsg({ ok: true, text: `Loaded ${stored.toLocaleString()} row(s) from ${file.name}.` });
+      router.refresh();
     } catch (e) {
-      setMsg({ ok: false, text: e instanceof Error ? e.message : String(e) });
+      const text =
+        e instanceof ApiError
+          ? e.message
+          : e instanceof Error
+            ? e.message
+            : String(e);
+      setMsg({ ok: false, text });
     } finally {
       setBusy(false);
+      setProgress(null);
     }
   }
 
@@ -167,8 +202,32 @@ export function SimpleUploader({
         />
       </div>
 
+      {progress && (
+        <div className="mt-4">
+          <div className="mb-1.5 flex items-center justify-between text-[12px]">
+            <span className="font-semibold">Uploading</span>
+            <span className="tnum text-[var(--muted)]">
+              {progress.done.toLocaleString()} of {progress.total.toLocaleString()} rows
+            </span>
+          </div>
+          <div className="progressbar">
+            <span style={{ width: `${Math.max(4, (progress.done / progress.total) * 100)}%` }} />
+          </div>
+        </div>
+      )}
+
       {msg && (
-        <div className={`callout mt-4 ${msg.ok ? "callout-ok" : "callout-warn"}`}>{msg.text}</div>
+        <div className={`callout mt-4 ${msg.ok ? "callout-ok" : "callout-warn"}`}>
+          {msg.text}
+          {!msg.ok && msg.text.includes("session has expired") && (
+            <>
+              {" "}
+              <a className="font-semibold underline" href="/login">
+                Sign in again
+              </a>
+            </>
+          )}
+        </div>
       )}
     </div>
   );

@@ -1,5 +1,5 @@
 import "server-only";
-import { eq } from "drizzle-orm";
+import { eq, inArray, sql as dsql } from "drizzle-orm";
 import { db } from "@/db";
 import { products, purchases, shipments, transactions } from "@/db/schema";
 import type { NormalizedRow } from "./avalara";
@@ -67,21 +67,57 @@ export type ProductInput = {
  * A product-master CSV is a deliberate human statement, so every value it
  * carries is locked the same way an on-screen edit is - a later catalog
  * rebuild refreshes the observed figures around it but never overwrites it.
+ *
+ * Written as ONE read plus batched upserts. A select-then-write per row is two
+ * round trips per SKU, which on a few thousand SKUs runs for minutes and dies
+ * on the serverless time limit.
  */
 export async function upsertProducts(rows: ProductInput[]) {
-  let count = 0;
-  for (const r of rows) {
-    if (!r.sku) continue;
-    const sku = r.sku.trim().toUpperCase();
-    const [prior] = await db.select().from(products).where(eq(products.sku, sku)).limit(1);
-    const locked = new Set(prior?.lockedFields ?? []);
+  const wanted = rows.filter((r) => r.sku && r.sku.trim());
+  if (!wanted.length) return 0;
 
-    const set: Record<string, unknown> = { sku, updatedAt: new Date() };
-    const put = (field: string, value: number | string | boolean | null | undefined, source?: string) => {
+  const skus = [...new Set(wanted.map((r) => r.sku!.trim().toUpperCase()))];
+  const existingRows = skus.length
+    ? await db.select().from(products).where(inArray(products.sku, skus))
+    : [];
+  const existing = new Map(existingRows.map((p) => [p.sku, p]));
+
+  const now = new Date();
+  const values: (typeof products.$inferInsert)[] = [];
+  const seen = new Set<string>();
+
+  for (const r of wanted) {
+    const sku = r.sku!.trim().toUpperCase();
+    if (seen.has(sku)) continue; // a batch cannot touch the same row twice
+    seen.add(sku);
+
+    const prior = existing.get(sku);
+    const locked = new Set(prior?.lockedFields ?? []);
+    const row: Record<string, unknown> = {
+      sku,
+      description: prior?.description ?? null,
+      wholesaleCost: prior?.wholesaleCost ?? null,
+      retailPrice: prior?.retailPrice ?? null,
+      liquidMl: prior?.liquidMl ?? null,
+      cartridgesPerUnit: prior?.cartridgesPerUnit ?? null,
+      systemType: prior?.systemType ?? null,
+      containsNicotine: prior?.containsNicotine ?? true,
+      costSource: prior?.costSource ?? "unknown",
+      priceSource: prior?.priceSource ?? "unknown",
+      mlSource: prior?.mlSource ?? "unknown",
+      systemTypeSource: prior?.systemTypeSource ?? "unknown",
+      updatedAt: now,
+    };
+
+    const put = (
+      field: string,
+      value: number | string | boolean | null | undefined,
+      sourceField?: string,
+    ) => {
       if (value === null || value === undefined || value === "") return;
-      set[field] = typeof value === "number" ? String(value) : value;
+      row[field] = typeof value === "number" ? String(value) : value;
       locked.add(field);
-      if (source) set[source] = "manual";
+      if (sourceField) row[sourceField] = "manual";
     };
 
     put("description", r.description ?? undefined);
@@ -90,31 +126,50 @@ export async function upsertProducts(rows: ProductInput[]) {
     put("liquidMl", r.liquidMl ?? undefined, "mlSource");
     put("cartridgesPerUnit", r.cartridgesPerUnit ?? undefined);
     if (r.systemType) {
-      set.systemType = r.systemType.trim().toUpperCase();
-      set.systemTypeSource = "manual";
+      row.systemType = r.systemType.trim().toUpperCase();
+      row.systemTypeSource = "manual";
       locked.add("systemType");
     }
     if (r.containsNicotine !== undefined) {
-      set.containsNicotine = r.containsNicotine;
+      row.containsNicotine = r.containsNicotine;
       locked.add("containsNicotine");
     }
-    set.lockedFields = [...locked];
 
-    const nicotine = (set.containsNicotine ?? prior?.containsNicotine ?? true) as boolean;
-    set.needsReview =
-      nicotine &&
-      ((set.wholesaleCost ?? prior?.wholesaleCost ?? null) === null ||
-        (set.systemType ?? prior?.systemType ?? null) === null ||
-        (set.liquidMl ?? prior?.liquidMl ?? null) === null);
+    row.lockedFields = [...locked];
+    row.needsReview =
+      Boolean(row.containsNicotine) &&
+      (row.wholesaleCost === null || row.systemType === null || row.liquidMl === null);
 
-    if (prior) {
-      await db.update(products).set(set).where(eq(products.id, prior.id));
-    } else {
-      await db.insert(products).values(set as typeof products.$inferInsert);
-    }
-    count += 1;
+    values.push(row as typeof products.$inferInsert);
   }
-  return count;
+
+  const CHUNK = 250;
+  for (let i = 0; i < values.length; i += CHUNK) {
+    await db
+      .insert(products)
+      .values(values.slice(i, i + CHUNK))
+      .onConflictDoUpdate({
+        target: products.sku,
+        set: {
+          description: dsql`excluded.description`,
+          wholesaleCost: dsql`excluded.wholesale_cost`,
+          retailPrice: dsql`excluded.retail_price`,
+          liquidMl: dsql`excluded.liquid_ml`,
+          cartridgesPerUnit: dsql`excluded.cartridges_per_unit`,
+          systemType: dsql`excluded.system_type`,
+          containsNicotine: dsql`excluded.contains_nicotine`,
+          costSource: dsql`excluded.cost_source`,
+          priceSource: dsql`excluded.price_source`,
+          mlSource: dsql`excluded.ml_source`,
+          systemTypeSource: dsql`excluded.system_type_source`,
+          lockedFields: dsql`excluded.locked_fields`,
+          needsReview: dsql`excluded.needs_review`,
+          updatedAt: dsql`excluded.updated_at`,
+        },
+      });
+  }
+
+  return values.length;
 }
 
 export type PurchaseInput = {
@@ -128,9 +183,11 @@ export type PurchaseInput = {
   wholesaleCost?: number;
 };
 
+const INSERT_CHUNK = 500;
+
 export async function insertPurchases(uploadId: number, rows: PurchaseInput[]) {
   if (!rows.length) return 0;
-  await db.insert(purchases).values(
+  const values =
     rows.map((r) => ({
       uploadId,
       period: r.period,
@@ -141,8 +198,10 @@ export async function insertPurchases(uploadId: number, rows: PurchaseInput[]) {
       mlTotal: n(r.mlTotal ?? 0),
       unitsTotal: n(r.unitsTotal ?? 0),
       wholesaleCost: n(r.wholesaleCost ?? 0),
-    })),
-  );
+    }));
+  for (let i = 0; i < values.length; i += INSERT_CHUNK) {
+    await db.insert(purchases).values(values.slice(i, i + INSERT_CHUNK));
+  }
   return rows.length;
 }
 
@@ -164,7 +223,7 @@ export type ShipmentInput = {
 
 export async function insertShipments(uploadId: number, rows: ShipmentInput[]) {
   if (!rows.length) return 0;
-  await db.insert(shipments).values(
+  const values =
     rows.map((r) => ({
       uploadId,
       period: r.period,
@@ -180,7 +239,9 @@ export async function insertShipments(uploadId: number, rows: ShipmentInput[]) {
       brand: r.brand ?? null,
       quantity: n(r.quantity ?? 0),
       mlTotal: n(r.mlTotal ?? 0),
-    })),
-  );
+    }));
+  for (let i = 0; i < values.length; i += INSERT_CHUNK) {
+    await db.insert(shipments).values(values.slice(i, i + INSERT_CHUNK));
+  }
   return rows.length;
 }

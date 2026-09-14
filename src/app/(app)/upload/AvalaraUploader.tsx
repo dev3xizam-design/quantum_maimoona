@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { FileDrop } from "@/components/FileDrop";
+import { postJson } from "@/lib/api-client";
 import Papa from "papaparse";
 import JSZip from "jszip";
 import type { Worksheet } from "exceljs";
@@ -31,15 +32,7 @@ export function AvalaraUploader() {
   const [stats, setStats] = useState<IngestStats | null>(null);
   const [errors, setErrors] = useState<string[]>([]);
 
-  async function post(path: string, body: unknown) {
-    const res = await fetch(path, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? `${path} failed`);
-    return res.json();
-  }
+  const post = <T,>(path: string, body: unknown) => postJson<T>(path, body);
 
   async function parseCsv(
     file: File | Blob,
@@ -83,8 +76,8 @@ export function AvalaraUploader() {
             buffer = [];
             parser.pause();
             pending.push(
-              post("/api/ingest/rows", { uploadId, rows: batch })
-                .then((r: { inserted: number; duplicates: number }) => {
+              post<{ inserted: number; duplicates: number }>("/api/ingest/rows", { uploadId, rows: batch })
+                .then((r) => {
                   counters.rows += batch.length;
                   counters.inserted += r.inserted;
                   counters.duplicates += r.duplicates;
@@ -102,7 +95,7 @@ export function AvalaraUploader() {
           try {
             await Promise.all(pending);
             if (buffer.length) {
-              const r = await post("/api/ingest/rows", { uploadId, rows: buffer });
+              const r = await post<{ inserted: number; duplicates: number }>("/api/ingest/rows", { uploadId, rows: buffer });
               counters.rows += buffer.length;
               counters.inserted += r.inserted;
               counters.duplicates += r.duplicates;
@@ -157,7 +150,7 @@ export function AvalaraUploader() {
       if (!buffer.length) return;
       const batch = buffer;
       buffer = [];
-      const r = await post("/api/ingest/rows", { uploadId, rows: batch });
+      const r = await post<{ inserted: number; duplicates: number }>("/api/ingest/rows", { uploadId, rows: batch });
       counters.rows += batch.length;
       counters.inserted += r.inserted;
       counters.duplicates += r.duplicates;
@@ -195,7 +188,10 @@ export function AvalaraUploader() {
 
     try {
       const names = Array.from(files).map((f) => f.name).join(", ");
-      const { uploadId } = await post("/api/ingest/start", { filename: names, kind: "avalara" });
+      const { uploadId } = await post<{ uploadId: number }>("/api/ingest/start", {
+        filename: names,
+        kind: "avalara",
+      });
 
       const runningStats = emptyStats();
       const seen = new Set<string>();

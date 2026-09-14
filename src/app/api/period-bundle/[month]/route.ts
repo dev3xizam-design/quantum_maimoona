@@ -18,9 +18,11 @@ export const dynamic = "force-dynamic";
  * Sheet, Return, Jurisdiction Detail, Reconciliation, Notes - plus the
  * consolidated all-states workbook, zipped into one folder per state.
  */
-export async function GET(_req: Request, { params }: { params: Promise<{ month: string }> }) {
+export async function GET(req: Request, { params }: { params: Promise<{ month: string }> }) {
   const session = await getSession();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  // A download is a browser navigation, so an expired session should land
+  // on the sign-in page rather than dumping raw JSON into the tab.
+  if (!session) return NextResponse.redirect(new URL("/login", req.url));
 
   const { month } = await params;
   if (!/^\d{4}-\d{2}$/.test(month)) {
