@@ -1,12 +1,20 @@
-import { asc } from "drizzle-orm";
+import { and, asc, eq, ilike, like, not, or, sql as dsql } from "drizzle-orm";
 import { db } from "@/db";
 import { jurisdictionCodes } from "@/db/schema";
 import { num } from "@/lib/money";
 import { deleteJurisdictionCode, saveJurisdictionCode } from "@/app/actions/config";
+import { STATE_NAMES } from "@/lib/states";
 
 export const dynamic = "force-dynamic";
 
 const TYPES = ["county", "city", "local", "special"];
+
+/**
+ * Paged: the directory's "Add all states" puts ~15,000 codes here, and rendering
+ * every row with its edit form produced a 125 MB page that never loaded.
+ */
+const PAGE_SIZE = 100;
+const FROM_DIRECTORY = "From directory (%";
 
 function Fields({ r }: { r?: typeof jurisdictionCodes.$inferSelect }) {
   return (
@@ -65,11 +73,59 @@ function Fields({ r }: { r?: typeof jurisdictionCodes.$inferSelect }) {
   );
 }
 
-export default async function JurisdictionsPage() {
+export default async function JurisdictionsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ state?: string; q?: string; source?: string; page?: string }>;
+}) {
+  const sp = await searchParams;
+  const state = STATE_NAMES[(sp.state ?? "").toUpperCase()] ? (sp.state as string).toUpperCase() : "";
+  const q = (sp.q ?? "").trim();
+  const source = sp.source === "manual" || sp.source === "directory" ? sp.source : "";
+  const page = Math.max(1, Number(sp.page ?? 1) || 1);
+
+  const filters = [
+    state ? eq(jurisdictionCodes.state, state) : undefined,
+    q
+      ? or(
+          ilike(jurisdictionCodes.jurisdictionName, `%${q}%`),
+          ilike(jurisdictionCodes.officialCode, `${q}%`),
+          ilike(jurisdictionCodes.avalaraAlias, `%${q}%`),
+        )
+      : undefined,
+    source === "directory" ? like(jurisdictionCodes.notes, FROM_DIRECTORY) : undefined,
+    source === "manual"
+      ? or(dsql`${jurisdictionCodes.notes} IS NULL`, not(like(jurisdictionCodes.notes, FROM_DIRECTORY)))
+      : undefined,
+  ].filter(Boolean);
+  const where = filters.length ? and(...filters) : undefined;
+
+  const [[counts]] = await Promise.all([
+    db
+      .select({
+        total: dsql<number>`count(*)::int`,
+        matching: dsql<number>`count(*) FILTER (WHERE ${where ?? dsql`true`})::int`,
+        directory: dsql<number>`count(*) FILTER (WHERE ${like(jurisdictionCodes.notes, FROM_DIRECTORY)})::int`,
+      })
+      .from(jurisdictionCodes),
+  ]);
+  const matching = Number(counts.matching);
+  const pages = Math.max(1, Math.ceil(matching / PAGE_SIZE));
+  const current = Math.min(page, pages);
+
   const rows = await db
     .select()
     .from(jurisdictionCodes)
-    .orderBy(asc(jurisdictionCodes.state), asc(jurisdictionCodes.jurisdictionType), asc(jurisdictionCodes.jurisdictionName));
+    .where(where)
+    .orderBy(asc(jurisdictionCodes.state), asc(jurisdictionCodes.jurisdictionType), asc(jurisdictionCodes.jurisdictionName))
+    .limit(PAGE_SIZE)
+    .offset((current - 1) * PAGE_SIZE);
+
+  const qs = (next: Record<string, string | number>) => {
+    const p = new URLSearchParams();
+    for (const [k, v] of Object.entries({ state, q, source, ...next })) if (String(v) !== "" && !(k === "page" && Number(v) === 1)) p.set(k, String(v));
+    return p.toString();
+  };
 
   return (
     <div className="space-y-4">
@@ -87,7 +143,40 @@ export default async function JurisdictionsPage() {
         </form>
       </details>
 
-      <div className="panel overflow-hidden">
+      <form method="get" className="panel grid grid-cols-2 gap-3 p-4 md:grid-cols-4">
+        <div>
+          <label className="field">State</label>
+          <select name="state" defaultValue={state}>
+            <option value="">All states</option>
+            {Object.keys(STATE_NAMES).sort().map((s) => (
+              <option key={s} value={s}>{s} - {STATE_NAMES[s]}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="field">Name, code or alias</label>
+          <input name="q" type="text" defaultValue={q} placeholder="e.g. Tulsa or 7204" />
+        </div>
+        <div>
+          <label className="field">Source</label>
+          <select name="source" defaultValue={source}>
+            <option value="">All codes</option>
+            <option value="manual">Hand-entered and seeded</option>
+            <option value="directory">Added from the US directory</option>
+          </select>
+        </div>
+        <div className="flex items-end">
+          <button className="btn btn-primary" type="submit">Filter</button>
+        </div>
+      </form>
+
+      <div className="text-[12px] text-[var(--muted)]">
+        {matching.toLocaleString()} of {Number(counts.total).toLocaleString()} codes
+        {Number(counts.directory) > 0 && ` (${Number(counts.directory).toLocaleString()} added from the US directory)`}
+        {" "}- page {current} of {pages}
+      </div>
+
+      <div className="panel overflow-x-auto">
         <table className="qtable">
           <thead>
             <tr>
@@ -134,6 +223,13 @@ export default async function JurisdictionsPage() {
           </tbody>
         </table>
       </div>
+
+      {pages > 1 && (
+        <div className="flex gap-2">
+          {current > 1 && <a className="btn btn-sm" href={`/config/jurisdictions?${qs({ page: current - 1 })}`}>Previous</a>}
+          {current < pages && <a className="btn btn-sm" href={`/config/jurisdictions?${qs({ page: current + 1 })}`}>Next</a>}
+        </div>
+      )}
     </div>
   );
 }
