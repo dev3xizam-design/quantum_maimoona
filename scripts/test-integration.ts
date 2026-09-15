@@ -886,3 +886,60 @@ test("the jurisdiction directory loads, and its Excel keeps codes as text", asyn
   const code = book.getWorksheet("Tax filing codes")!.getRow(2).getCell(4).value;
   assert.equal(code, "5521", "a code is text, never a number");
 });
+
+test("adding every state at once keeps verified codes, never collides, and undoes cleanly", async () => {
+  const { db } = await import("../src/db");
+  const { parseDirectoryCsv } = await import("../src/lib/jurisdictions/directory");
+  const { promoteStates, removeDirectoryCreatedCodes } = await import("../src/lib/jurisdictions/promote-db");
+  const { codeKey } = await import("../src/lib/engine/sales");
+  const { JURISDICTION_SEED, DEFAULT_EFFECTIVE_FROM } = await import("../src/lib/seed-data");
+
+  // The real dataset, and the hand-verified codes as seeded.
+  await db.delete(schema.jurisdictionDirectory);
+  await db.delete(schema.jurisdictionCodes);
+  const rows = parseDirectoryCsv(readFileSync(path.join(process.cwd(), "data/jurisdictions/us-jurisdictions.csv"), "utf8"));
+  for (let i = 0; i < rows.length; i += 2000) await db.insert(schema.jurisdictionDirectory).values(rows.slice(i, i + 2000));
+  for (const j of JURISDICTION_SEED) {
+    await db.insert(schema.jurisdictionCodes).values({
+      state: j.state, jurisdictionName: j.name, jurisdictionType: j.type, officialCode: j.code,
+      pairedCode: j.pairedCode ?? null, pairedName: j.pairedName ?? null,
+      rate: j.rate === undefined ? null : String(j.rate), rateIncludesState: j.rateIncludesState ?? false,
+      avalaraAlias: j.avalaraAlias ?? null, notes: j.notes ?? null, effectiveFrom: DEFAULT_EFFECTIVE_FROM,
+    });
+  }
+  const seeded = await db.select().from(schema.jurisdictionCodes);
+
+  const first = await promoteStates("test", null, false);
+  assert.ok(first.added > 10_000, `expected a nationwide load, got ${first.added}`);
+
+  const all = await db.select().from(schema.jurisdictionCodes);
+  // Every seeded code is still there, unchanged.
+  for (const s of seeded) {
+    const now = all.find((c) => c.id === s.id);
+    assert.equal(now?.officialCode, s.officialCode, `${s.state} ${s.jurisdictionName} was altered`);
+  }
+  // No two codes share an engine key within a state - the index would silently drop one.
+  const keys = new Map<string, string>();
+  for (const c of all) {
+    for (const name of [c.jurisdictionName, c.avalaraAlias]) {
+      if (!name) continue;
+      const k = `${c.state}|${c.jurisdictionType}|${codeKey(name)}`;
+      assert.ok(!keys.has(k) || keys.get(k) === c.officialCode + c.id, `engine key collision: ${k}`);
+      keys.set(k, c.officialCode + c.id);
+    }
+  }
+  const okc = all.filter((c) => c.state === "OK" && c.jurisdictionType === "city" && codeKey(c.jurisdictionName) === "oklahoma");
+  assert.deepEqual(okc.map((c) => c.officialCode), ["5521"], "Oklahoma City must still resolve to 5521 only");
+  // Codes-only load: no rate switched on, and paired lines only where the return takes them.
+  const added = all.filter((c) => c.notes?.startsWith("From directory ("));
+  assert.ok(added.every((c) => c.rate === null));
+  assert.ok(added.every((c) => c.pairedCode === null || c.state === "OK"));
+  assert.ok(!added.some((c) => c.state === "WY" && c.officialCode === "0101"), "a WY lodging-only code was added");
+
+  const second = await promoteStates("test", null, false);
+  assert.equal(second.added, 0, "pressing it twice adds nothing");
+
+  const removed = await removeDirectoryCreatedCodes("test");
+  assert.equal(removed, first.added);
+  assert.equal((await db.select().from(schema.jurisdictionCodes)).length, seeded.length);
+});

@@ -775,6 +775,18 @@ test("promoting directory codes never replaces a verified code under the same en
   assert.deepEqual(plan.alreadyPresent.map((c) => c.officialCode), ["0921", "5507", "7288"]);
   assert.deepEqual(plan.ambiguous.map((c) => c.officialCode), ["1409", "1410"]);
   assert.deepEqual(plan.noCode.map((c) => c.jurisdictionName), ["Some District"]);
+
+  // A state's own return code outranks the SST FIPS code listed for the same place.
+  const nd = planPromotion(
+    [
+      { jurisdictionType: "city", jurisdictionName: "Hannaford", officialCode: "38340", codeSystem: "SST FIPS" },
+      { jurisdictionType: "city", jurisdictionName: "Hannaford", officialCode: "112", codeSystem: "ND local code" },
+      { jurisdictionType: "city", jurisdictionName: "Only Fips", officialCode: "99999", codeSystem: "SST FIPS" },
+    ],
+    [],
+  );
+  assert.deepEqual(nd.add.map((c) => c.officialCode), ["112", "99999"]);
+  assert.deepEqual(nd.superseded.map((c) => c.officialCode), ["38340"]);
 });
 
 test("directory types map onto the only types the engine looks up", async () => {

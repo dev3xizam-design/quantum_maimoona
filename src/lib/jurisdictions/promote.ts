@@ -16,7 +16,15 @@ export type ExistingCode = {
   avalaraAlias: string | null;
 };
 
-export type Candidate = { jurisdictionType: string; jurisdictionName: string; officialCode: string };
+export type Candidate = {
+  jurisdictionType: string;
+  jurisdictionName: string;
+  officialCode: string;
+  /** Whose code it is. A state's own return code outranks a FIPS code for the same place. */
+  codeSystem?: string;
+};
+
+const isFips = (c: Candidate) => /FIPS/i.test(c.codeSystem ?? "");
 
 export type PromotionPlan<T extends Candidate> = {
   add: T[];
@@ -26,6 +34,8 @@ export type PromotionPlan<T extends Candidate> = {
   ambiguous: T[];
   /** The state publishes no code for it. */
   noCode: T[];
+  /** A FIPS code for a place that also has the state's own return code. */
+  superseded: T[];
 };
 
 const nameKey = (type: string, name: string | null) => `${type}|${codeKey(name)}`;
@@ -39,8 +49,14 @@ export function planPromotion<T extends Candidate>(allCandidates: T[], existing:
     takenCodes.add(`${c.jurisdictionType}|${c.officialCode}`);
   }
 
+  const coded = allCandidates.filter((c) => c.officialCode.trim() !== "");
+  // NE, SD, ND and UT list each place under the DOR's return code AND its SST
+  // FIPS code. The return code is the one that gets filed, so it wins.
+  const hasStateCode = new Set(coded.filter((c) => !isFips(c)).map((c) => nameKey(c.jurisdictionType, c.jurisdictionName)));
+  const superseded = coded.filter((c) => isFips(c) && hasStateCode.has(nameKey(c.jurisdictionType, c.jurisdictionName)));
+  const candidates = coded.filter((c) => !superseded.includes(c));
+
   const wanted = new Map<string, Set<string>>();
-  const candidates = allCandidates.filter((c) => c.officialCode.trim() !== "");
   for (const c of candidates) {
     const k = nameKey(c.jurisdictionType, c.jurisdictionName);
     // Count distinct codes, so the same code listed twice is not "ambiguous".
@@ -52,6 +68,7 @@ export function planPromotion<T extends Candidate>(allCandidates: T[], existing:
     alreadyPresent: [],
     ambiguous: [],
     noCode: allCandidates.filter((c) => c.officialCode.trim() === ""),
+    superseded,
   };
   const added = new Set<string>();
   for (const c of candidates) {

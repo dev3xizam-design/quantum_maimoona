@@ -1,11 +1,14 @@
-import { and, asc, eq, inArray, sql as dsql } from "drizzle-orm";
+import { and, asc, eq, inArray, like, sql as dsql } from "drizzle-orm";
 import { db } from "@/db";
 import { jurisdictionCodes, jurisdictionDirectory } from "@/db/schema";
-import { promoteDirectoryRow, promoteStateTaxCodes } from "@/app/actions/directory";
+import { promoteAllTaxCodes, promoteDirectoryRow, promoteStateTaxCodes, removeDirectoryCodes } from "@/app/actions/directory";
+import { ConfirmSubmit } from "./ConfirmSubmit";
 import { JURISDICTION_TYPES, engineType, isPromotable } from "@/lib/jurisdictions/directory";
 import { STATE_NAMES } from "@/lib/states";
 
 export const dynamic = "force-dynamic";
+/** The add-all action writes ~15,000 rows plus their change log. */
+export const maxDuration = 300;
 export const metadata = { title: "US jurisdiction directory" };
 
 const PAGE_SIZE = 100;
@@ -49,6 +52,20 @@ export default async function DirectoryPage({
       .from(jurisdictionDirectory)
       .where(cat !== "all" ? eq(jurisdictionDirectory.category, cat) : undefined)
       .groupBy(jurisdictionDirectory.state),
+  ]);
+  const [[promotable], [fromDirectory]] = await Promise.all([
+    db
+      .select({ n: dsql<number>`count(*)::int` })
+      .from(jurisdictionDirectory)
+      .where(
+        and(
+          eq(jurisdictionDirectory.category, "tax"),
+          dsql`${jurisdictionDirectory.jurisdictionType} <> 'state'`,
+          dsql`${jurisdictionDirectory.officialCode} <> ''`,
+          dsql`${jurisdictionDirectory.codeSystem} NOT ILIKE '%not for sales tax%'`,
+        ),
+      ),
+    db.select({ n: dsql<number>`count(*)::int` }).from(jurisdictionCodes).where(like(jurisdictionCodes.notes, "From directory (%")),
   ]);
   const total = Number(matching.n);
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -156,6 +173,43 @@ export default async function DirectoryPage({
           )}
         </div>
       </form>
+
+      <div className="panel space-y-3 p-4">
+        <form action={promoteAllTaxCodes} className="flex flex-wrap items-center gap-3">
+          <input type="hidden" name="returnTo" value={returnTo} />
+          <div className="text-[13px]">
+            <strong>Add every state at once</strong> - checks all {Number(promotable.n).toLocaleString()} sales/use tax
+            codes across the 50 states + DC and adds each one the engine can use. Skipped and reported: codes already
+            there, a FIPS code where the state has its own return code, and a name split across counties (pick those by
+            hand). Pressing it twice adds nothing new.
+          </div>
+          <label className="flex items-center gap-2 text-[12px]">
+            <input type="checkbox" name="includeRates" />
+            Include published rates (changes computed tax and collection warnings)
+          </label>
+          <ConfirmSubmit
+            className="btn btn-primary"
+            label="Add all states"
+            pendingLabel="Adding - this takes a minute..."
+            message="Add every state's tax codes to the filing codes the engine uses? Existing codes are kept. You can undo with 'Remove directory codes'."
+          />
+        </form>
+        {Number(fromDirectory.n) > 0 && (
+          <form action={removeDirectoryCodes} className="flex flex-wrap items-center gap-3 border-t border-[var(--line)] pt-3">
+            <input type="hidden" name="returnTo" value={returnTo} />
+            <div className="text-[12px] text-[var(--muted)]">
+              {Number(fromDirectory.n).toLocaleString()} filing code(s) came from this directory. Removing them leaves
+              hand-entered and seeded codes untouched.
+            </div>
+            <ConfirmSubmit
+              className="btn btn-sm btn-danger"
+              label="Remove directory codes"
+              pendingLabel="Removing..."
+              message={`Remove the ${Number(fromDirectory.n).toLocaleString()} filing codes this directory added? Hand-entered codes stay.`}
+            />
+          </form>
+        )}
+      </div>
 
       {stateTaxCount > 0 && (
         <form action={promoteStateTaxCodes} className="panel flex flex-wrap items-center gap-3 p-4">
