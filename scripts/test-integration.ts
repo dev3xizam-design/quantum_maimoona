@@ -891,7 +891,7 @@ test("adding every state at once keeps verified codes, never collides, and undoe
   const { db } = await import("../src/db");
   const { parseDirectoryCsv } = await import("../src/lib/jurisdictions/directory");
   const { promoteStates, removeDirectoryCreatedCodes } = await import("../src/lib/jurisdictions/promote-db");
-  const { codeKey } = await import("../src/lib/engine/sales");
+  const { codeKey, indexKey } = await import("../src/lib/engine/sales");
   const { JURISDICTION_SEED, DEFAULT_EFFECTIVE_FROM } = await import("../src/lib/seed-data");
 
   // The real dataset, and the hand-verified codes as seeded.
@@ -923,7 +923,7 @@ test("adding every state at once keeps verified codes, never collides, and undoe
   for (const c of all) {
     for (const name of [c.jurisdictionName, c.avalaraAlias]) {
       if (!name) continue;
-      const k = `${c.state}|${c.jurisdictionType}|${codeKey(name)}`;
+      const k = `${c.state}|${indexKey(c.jurisdictionType, name)}`;
       assert.ok(!keys.has(k) || keys.get(k) === c.officialCode + c.id, `engine key collision: ${k}`);
       keys.set(k, c.officialCode + c.id);
     }

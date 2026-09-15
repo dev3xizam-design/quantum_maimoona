@@ -3,7 +3,7 @@ import { db } from "@/db";
 import { jurisdictionCodes, jurisdictionDirectory } from "@/db/schema";
 import { promoteAllTaxCodes, promoteDirectoryRow, promoteStateTaxCodes, removeDirectoryCodes } from "@/app/actions/directory";
 import { ConfirmSubmit } from "./ConfirmSubmit";
-import { JURISDICTION_TYPES, engineType, isPromotable } from "@/lib/jurisdictions/directory";
+import { DIRECTORY_NOTE, JURISDICTION_TYPES, engineType, isPromotable } from "@/lib/jurisdictions/directory";
 import { STATE_NAMES } from "@/lib/states";
 
 export const dynamic = "force-dynamic";
@@ -65,7 +65,7 @@ export default async function DirectoryPage({
           dsql`${jurisdictionDirectory.codeSystem} NOT ILIKE '%not for sales tax%'`,
         ),
       ),
-    db.select({ n: dsql<number>`count(*)::int` }).from(jurisdictionCodes).where(like(jurisdictionCodes.notes, "From directory (%")),
+    db.select({ n: dsql<number>`count(*)::int` }).from(jurisdictionCodes).where(like(jurisdictionCodes.notes, `${DIRECTORY_NOTE}%`)),
   ]);
   const total = Number(matching.n);
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));

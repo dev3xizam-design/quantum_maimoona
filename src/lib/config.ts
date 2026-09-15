@@ -12,6 +12,7 @@ import { num } from "./money";
 import { isoDate, periodStart } from "./periods";
 import type { SalesConfig, JurisdictionCode } from "./engine/sales";
 import type { ExciseConfigRow } from "./engine/excise";
+import { DIRECTORY_NOTE } from "./jurisdictions/directory";
 
 /**
  * Effective dating: the row in force at the START of the filing period wins.
@@ -82,6 +83,7 @@ export async function resolveJurisdictionCodes(
     rate: r.rate === null ? null : num(r.rate),
     rateIncludesState: r.rateIncludesState,
     avalaraAlias: r.avalaraAlias,
+    fromDirectory: r.notes?.startsWith(DIRECTORY_NOTE) ?? false,
   }));
 }
 

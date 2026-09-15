@@ -4,6 +4,7 @@ import { jurisdictionCodes } from "@/db/schema";
 import { num } from "@/lib/money";
 import { deleteJurisdictionCode, saveJurisdictionCode } from "@/app/actions/config";
 import { STATE_NAMES } from "@/lib/states";
+import { DIRECTORY_NOTE } from "@/lib/jurisdictions/directory";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +15,7 @@ const TYPES = ["county", "city", "local", "special"];
  * every row with its edit form produced a 125 MB page that never loaded.
  */
 const PAGE_SIZE = 100;
-const FROM_DIRECTORY = "From directory (%";
+const FROM_DIRECTORY = `${DIRECTORY_NOTE}%`;
 
 function Fields({ r }: { r?: typeof jurisdictionCodes.$inferSelect }) {
   return (

@@ -6,7 +6,7 @@ import { and, eq, gte, inArray, isNull, like, or } from "drizzle-orm";
 import { db } from "../../db";
 import { changeLog, jurisdictionCodes, jurisdictionDirectory } from "../../db/schema";
 import { DEFAULT_EFFECTIVE_FROM } from "../seed-data";
-import { PAIRED_ON_RETURN, engineRate, engineType, isPromotable } from "./directory";
+import { DIRECTORY_NOTE, PAIRED_ON_RETURN, engineRate, engineType, isPromotable } from "./directory";
 import { planPromotion } from "./promote";
 
 export type DirRow = typeof jurisdictionDirectory.$inferSelect;
@@ -14,8 +14,6 @@ export type NewCode = typeof jurisdictionCodes.$inferInsert;
 
 export const today = () => new Date().toISOString().slice(0, 10);
 
-/** Every code the directory creates starts its notes with this - it is how the undo finds them. */
-export const DIRECTORY_NOTE = "From directory (";
 
 export function toCode(r: DirRow, includeRate: boolean): NewCode {
   const rate = includeRate ? engineRate(r) : null;

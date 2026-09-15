@@ -7,7 +7,7 @@
  * free AND no other row in the same batch wants that key - otherwise a city
  * split across counties would overwrite whichever portion was verified.
  */
-import { codeKey } from "../engine/sales";
+import { indexKey } from "../engine/sales";
 
 export type ExistingCode = {
   jurisdictionType: string;
@@ -38,7 +38,7 @@ export type PromotionPlan<T extends Candidate> = {
   superseded: T[];
 };
 
-const nameKey = (type: string, name: string | null) => `${type}|${codeKey(name)}`;
+const nameKey = (type: string, name: string | null) => indexKey(type, name);
 
 export function planPromotion<T extends Candidate>(allCandidates: T[], existing: ExistingCode[]): PromotionPlan<T> {
   const takenNames = new Set<string>();

@@ -20,6 +20,7 @@ import { computeExcise, type ExciseConfigRow, type ProductRow } from "./engine/e
 import { computePact } from "./engine/pact";
 import type { AnyResult, ExciseResult, PactResult, SalesResult, TxRow } from "./engine/types";
 import { persistableResult } from "./compute";
+import { DIRECTORY_NOTE } from "./jurisdictions/directory";
 
 /**
  * Computes every return for a calendar month in ONE pass.
@@ -227,6 +228,7 @@ export async function computePeriodEverything(
             rate: c.rate === null ? null : num(c.rate),
             rateIncludesState: c.rateIncludesState,
             avalaraAlias: c.avalaraAlias,
+            fromDirectory: c.notes?.startsWith(DIRECTORY_NOTE) ?? false,
           }));
         try {
           sales = computeSales(txFor(state, salesPeriod), { config, codes, period: salesPeriod });

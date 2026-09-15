@@ -818,3 +818,77 @@ test("the directory CSV is refused whole when any row is bad, and codes keep lea
   assert.throws(() => parseDirectoryCsv(`${head}\n${good.replace("WY", "PR")}\n`), /unknown state/);
   assert.throws(() => parseDirectoryCsv(`state,name\nWY,x\n`), /missing columns/);
 });
+
+/* ------------------------------------------------------------------ */
+/* Texas: taxing authorities, special districts                        */
+/* ------------------------------------------------------------------ */
+
+const txConfig: SalesConfig = { ...baseConfig, state: "TX", stateRate: 0.0625, hasLocal: true, allocation: "city_county" };
+const txCode = (jurisdictionType: string, jurisdictionName: string, officialCode: string, fromDirectory = true) => ({
+  jurisdictionName, jurisdictionType, officialCode, pairedCode: null, pairedName: null,
+  rate: null, rateIncludesState: false, avalaraAlias: null, fromDirectory,
+});
+
+test("Avalara's special districts find the Comptroller's codes despite the different spelling", () => {
+  // A Houston sale in Harris County: Harris levies no county tax, so Avalara has no County row.
+  const rows = [
+    line("INV1", "1", "State", { amount: 100, taxable: 100, tax: 6.25 }, { state: "TX", destCounty: "HARRIS", destCity: "HOUSTON", jurisdictionDescription: "TEXAS" }),
+    line("INV1", "1", "City", { amount: 100, taxable: 100, tax: 1 }, { state: "TX", destCounty: "HARRIS", destCity: "HOUSTON", jurisdictionDescription: "HOUSTON" }),
+    line("INV1", "1", "Special Tax Jurisdiction", { amount: 100, taxable: 100, tax: 1 }, { state: "TX", destCounty: "HARRIS", destCity: "HOUSTON", jurisdictionDescription: "HOUSTON MTA TRANSIT" }),
+    line("INV2", "1", "State", { amount: 50, taxable: 50, tax: 3.13 }, { state: "TX", destCounty: "BEXAR", destCity: "SAN ANTONIO", jurisdictionDescription: "TEXAS" }),
+    line("INV2", "1", "Special Tax Jurisdiction", { amount: 50, taxable: 50, tax: 0.75 }, { state: "TX", destCounty: "BEXAR", destCity: "SAN ANTONIO", jurisdictionDescription: "BEXAR CO ESD 3 SP" }),
+  ];
+  const r = computeSales(rows, {
+    config: txConfig,
+    period: "2026-07",
+    codes: [
+      txCode("city", "Houston", "2101019"),
+      txCode("special", "Houston MTA", "3101990"),
+      txCode("special", "Bexar County Emergency Services District No. 3", "5015593"),
+    ],
+  });
+  const code = (name: string) => r.byJurisdiction.find((l) => l.name === name)?.code;
+  assert.equal(code("HOUSTON MTA TRANSIT"), "3101990");
+  assert.equal(code("BEXAR CO ESD 3 SP"), "5015593");
+  // Harris and Bexar counties levy nothing: no code exists and none is asked for.
+  assert.ok(!r.warnings.some((w) => /no official filing code/.test(w)), r.warnings.join(" | "));
+});
+
+test("a Texas district that collected tax with no code IS flagged", () => {
+  const rows = [
+    line("INV1", "1", "State", { amount: 100, taxable: 100, tax: 6.25 }, { state: "TX", destCounty: "COLLIN", destCity: "PROSPER", jurisdictionDescription: "TEXAS" }),
+    line("INV1", "1", "Special Tax Jurisdiction", { amount: 100, taxable: 100, tax: 0.5 }, { state: "TX", destCounty: "COLLIN", destCity: "PROSPER", jurisdictionDescription: "PROSPER FCP AND EMSD SP" }),
+  ];
+  const r = computeSales(rows, { config: txConfig, period: "2026-07", codes: [] });
+  assert.ok(r.warnings.some((w) => /1 jurisdiction\(s\) have no official filing code loaded: PROSPER FCP AND EMSD SP/.test(w)));
+  assert.ok(!r.warnings.some((w) => /COLLIN/.test(w)), "Collin County levies nothing and must not be flagged");
+});
+
+test("district name keys: abbreviations match, different districts stay different", async () => {
+  const { specialKey, codeKey } = await import("../src/lib/engine/sales");
+  const same = (a: string, b: string) => assert.equal(specialKey(a), specialKey(b), `${a} vs ${b}`);
+  same("TRAVIS CO EMERGENCY SERVICES DISTRICT 2A SP", "Travis County Emergency Services District No. 2-A");
+  same("WALLER-HARRIS EMERGENCY SERVICES DISTRICT NO.200", "Waller-Harris Emergency Services District No. 200");
+  same("COMAL COUNTY EMERGENCY SVCS NO. 3", "Comal County Emergency Services District No. 3");
+  same("FORT WORTH CRIME CONTROL", "Fort Worth Crime Control District");
+  same("CORINTH FIRE CONTROL, PREVENTION AND EMERGENCY MEDICAL SERVICES DISTRICT", "Corinth Fire Control and Prevention & Emergency Medical Services District");
+  assert.notEqual(specialKey("Bexar County ESD 3"), specialKey("Bexar County ESD 3-A"));
+  assert.notEqual(specialKey("Hays County ESD 6"), specialKey("Hays County ESD 6-A"));
+  assert.notEqual(specialKey("Harris County ESD 1"), specialKey("Harris County ESD 10"));
+  assert.equal(codeKey("JOHNSTON CTY"), codeKey("Johnston"), "the OK COPO chart writes County as CTY");
+});
+
+test("a hand-entered code beats a directory code under the same name", () => {
+  const rows = [
+    line("INV1", "1", "State", { amount: 100, taxable: 100, tax: 4.5 }, { state: "OK", destCounty: "CANADIAN", destCity: null, jurisdictionDescription: "OKLAHOMA" }),
+    line("INV1", "1", "County", { amount: 100, taxable: 100, tax: 0.35 }, { state: "OK", destCounty: "CANADIAN", destCity: null, jurisdictionDescription: "CANADIAN" }),
+  ];
+  const codes = [
+    txCode("county", "Canadian", "1111", false),
+    txCode("county", "CANADIAN CTY", "0988", true),
+  ];
+  for (const order of [codes, [...codes].reverse()]) {
+    const r = computeSales(rows, { config: { ...txConfig, state: "OK" }, period: "2026-07", codes: order });
+    assert.equal(r.byCounty[0].code, "1111", "load order must not decide which code is filed");
+  }
+});

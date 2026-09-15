@@ -140,6 +140,9 @@ export function engineType(directoryType: string): "county" | "city" | "local" |
   }
 }
 
+/** Every filing code the directory creates starts its notes with this - how the undo and the engine tell them apart. */
+export const DIRECTORY_NOTE = "From directory (";
+
 /**
  * Only Oklahoma's return takes a paired line (city COPO + county COPO). Elsewhere
  * a paired code in the directory is context - the county a city sits in, the CA

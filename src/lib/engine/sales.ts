@@ -26,6 +26,8 @@ export type JurisdictionCode = {
   rate: number | null;
   rateIncludesState: boolean;
   avalaraAlias: string | null;
+  /** Added from the US jurisdiction directory rather than entered by a person. */
+  fromDirectory?: boolean;
 };
 
 export type SalesConfig = {
@@ -53,21 +55,66 @@ function signedValue(v: number, ret: boolean): number {
   return ret ? -Math.abs(v) : v;
 }
 
-/** Exported so the directory promotion detects exactly the collisions this index would have. */
 export function codeKey(name: string | null | undefined) {
-  return norm(name).replace(/\s+(county|parish|city)$/i, "");
+  // "CTY" is how the Oklahoma COPO chart writes County ("JOHNSTON CTY").
+  return norm(name).replace(/\s+(county|parish|city|cty)$/i, "");
+}
+
+/**
+ * Special districts are where Avalara and the state spell names differently:
+ * "BEXAR CO ESD 3 SP" is the Comptroller's "Bexar County Emergency Services
+ * District No. 3", "HOUSTON MTA TRANSIT" is "Houston MTA". Both sides reduce to
+ * the same key. Names with a "/" (Texas combined areas) never match an Avalara
+ * row, which lists the city and the district separately.
+ */
+export function specialKey(name: string | null | undefined) {
+  const ABBREVIATIONS: [RegExp, string][] = [
+    [/\bco\b|\bcnty\b/g, "county"],
+    [/\besd\b/g, "emergency services district"],
+    [/\bemsd\b/g, "emergency medical services district"],
+    [/\bfcp\b/g, "fire control prevention"],
+    [/\bccpd\b/g, "crime control and prevention district"],
+    [/\bmdd\b/g, "municipal development district"],
+    [/\bsvcs?\b/g, "services"],
+    [/\bpub\b/g, "public"],
+    [/\blib\b/g, "library"],
+    [/\bdist\b/g, "district"],
+  ];
+  let s = norm(name)
+    .replace(/&/g, " and ")
+    .replace(/\bno\.?\s*(?=\d)/g, " ") // "No. 3", "NO.200", "No 6-A"
+    .replace(/[.,#()]/g, " ")
+    .replace(/(\d)-([a-z])\b/g, "$1$2"); // "8-A" = "8A"
+  for (const [re, to] of ABBREVIATIONS) s = s.replace(re, to);
+  return s
+    .replace(/\bfire control and prevention\b/g, "fire control prevention")
+    .replace(/\bemergency services(?! district)/g, "emergency services district")
+    .replace(/\bcrime control( and prevention)?( district)?\b/g, "crime control")
+    .replace(/\bcommunity\b/g, " ")
+    .replace(/\s+(sp|transit)$/g, "")
+    .replace(/\s+(sp|transit)$/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** The engine's lookup key. Exported so directory promotion detects exactly the collisions this index would have. */
+export function indexKey(type: string, name: string | null | undefined) {
+  return `${type}|${type === "special" ? specialKey(name) : codeKey(name)}`;
 }
 
 function buildCodeIndex(codes: JurisdictionCode[]) {
   const byName = new Map<string, JurisdictionCode>();
-  for (const c of codes) {
-    byName.set(`${c.jurisdictionType}|${codeKey(c.jurisdictionName)}`, c);
-    if (c.avalaraAlias) byName.set(`${c.jurisdictionType}|${codeKey(c.avalaraAlias)}`, c);
+  // Where a hand-entered or seeded code and a directory code share a key, the
+  // person's code wins - it is loaded last, so it is the one left in the map.
+  const ordered = [...codes].sort((a, b) => Number(!a.fromDirectory) - Number(!b.fromDirectory));
+  for (const c of ordered) {
+    byName.set(indexKey(c.jurisdictionType, c.jurisdictionName), c);
+    if (c.avalaraAlias) byName.set(indexKey(c.jurisdictionType, c.avalaraAlias), c);
   }
   return {
     lookup(type: string, name: string | null | undefined): JurisdictionCode | null {
       if (!name) return null;
-      return byName.get(`${type}|${codeKey(name)}`) ?? null;
+      return byName.get(indexKey(type, name)) ?? null;
     },
   };
 }
@@ -253,7 +300,17 @@ export function computeSales(
         : `OVER-COLLECTION: Avalara collected ${taxCollected.toFixed(2)} vs computed ${taxComputed.toFixed(2)} (+${Math.abs(delta).toFixed(2)}). Remit what was collected unless the state says otherwise.`,
     );
   }
-  const unmapped = [...byCounty, ...byCity].filter((l) => l.unmapped && l.taxable !== 0);
+  /**
+   * TX and OK (city_county) returns list each local TAXING authority - city,
+   * taxing county, transit authority, special district. Every destination
+   * county gets a rollup line here, but Travis or Harris County levies nothing,
+   * so it has no code and needs none; a transit authority that collected tax
+   * does. There, check the jurisdictions Avalara actually taxed under.
+   */
+  const unmapped =
+    config.allocation === "city_county"
+      ? byJurisdiction.filter((l) => l.unmapped && norm(l.type) !== "state" && l.tax !== 0)
+      : [...byCounty, ...byCity].filter((l) => l.unmapped && norm(l.type) !== "special" && l.taxable !== 0);
   if (config.allocation !== "flat" && unmapped.length) {
     warnings.push(
       `${unmapped.length} jurisdiction(s) have no official filing code loaded: ${unmapped
@@ -321,7 +378,15 @@ function finalizeLine(
   config: SalesConfig,
 ): JurisdictionLine {
   const type = norm(line.type);
-  const lookupType = type.includes("city") ? "city" : type.includes("county") ? "county" : type;
+  // Avalara's "Special Tax Jurisdiction" rows look up codes stored as "special" -
+  // before this they searched for "special tax jurisdiction" and never matched.
+  const lookupType = type.includes("city")
+    ? "city"
+    : type.includes("county")
+      ? "county"
+      : type.includes("special")
+        ? "special"
+        : type;
   // Only a COUNTY line may fall back to the county name. A city line that
   // borrowed its county's code would file, say, Bethany's sales under the
   // Oklahoma City COPO code.
@@ -343,7 +408,7 @@ function finalizeLine(
     line.unmapped = false;
   } else {
     line.officialRate = null;
-    line.unmapped = lookupType === "county" || lookupType === "city";
+    line.unmapped = lookupType === "county" || lookupType === "city" || lookupType === "special";
   }
 
   /**
