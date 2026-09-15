@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "npm run jurisdictions:files && next build",
     "start": "next start",
     "lint": "eslint",
     "db:generate": "drizzle-kit generate",
@@ -15,7 +15,9 @@
     "typecheck": "tsc --noEmit",
     "test": "tsx --test scripts/test-engine.ts",
     "test:integration": "tsx --conditions=react-server --test scripts/test-integration.ts",
-    "test:all": "npm test && npm run test:integration"
+    "test:all": "npm test && npm run test:integration",
+    "db:jurisdictions": "tsx scripts/load-jurisdictions.ts",
+    "jurisdictions:files": "tsx scripts/load-jurisdictions.ts --files"
   },
   "dependencies": {
     "@neon/config": "^1.3.2",

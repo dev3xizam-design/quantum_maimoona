@@ -7,6 +7,7 @@ const TABS = [
   { href: "/config", label: "Sales & PACT" },
   { href: "/config/excise", label: "Excise" },
   { href: "/config/jurisdictions", label: "Jurisdiction codes" },
+  { href: "/config/directory", label: "US directory" },
   { href: "/config/accounts", label: "Accounts" },
   { href: "/config/nexus", label: "Nexus thresholds" },
   { href: "/config/stores", label: "Stores & Medusa" },

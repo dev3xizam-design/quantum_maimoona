@@ -41,7 +41,7 @@ test("the generated migration creates every table the app queries", async () => 
   );
   const tables = res.rows.map((r) => r.table_name).sort();
   for (const t of [
-    "accounts", "change_log", "excise_config", "filings", "jurisdiction_codes",
+    "accounts", "change_log", "excise_config", "filings", "jurisdiction_codes", "jurisdiction_directory",
     "nexus_thresholds", "products", "purchases", "run_log", "shipments",
     "state_tax_config", "transactions", "uploads", "users",
   ]) {
@@ -858,4 +858,31 @@ test("every store variant is registered as a product, searchable by name", async
     .from(schema.products)
     .where(and(eq(schema.products.storeName, "Reg Test Store")));
   assert.equal(Number(all[0].n), 2);
+});
+
+test("the jurisdiction directory loads, and its Excel keeps codes as text", async () => {
+  const { db } = await import("../src/db");
+  const { parseDirectoryCsv, buildDirectoryWorkbook, DIRECTORY_COLUMNS } = await import("../src/lib/jurisdictions/directory");
+  const ExcelJS = (await import("exceljs")).default;
+
+  const csv = [
+    DIRECTORY_COLUMNS.join(","),
+    'tax,OK,Oklahoma City,city,5521,OK COPO,Oklahoma County,5588,Oklahoma,0.0413,0.0863,false,,,https://oklahoma.gov,"spans four counties, use per county"',
+    "government,WY,Natrona County,county,56025,Census FIPS,Natrona County,,,,,false,,,https://www2.census.gov,",
+  ].join("\n");
+  await db.insert(schema.jurisdictionDirectory).values(parseDirectoryCsv(csv));
+
+  const saved = await db.select().from(schema.jurisdictionDirectory);
+  assert.equal(saved.length, 2);
+  const okc = saved.find((r) => r.officialCode === "5521")!;
+  assert.equal(okc.pairedCode, "5588");
+  assert.equal(Number(okc.localRate), 0.0413);
+  assert.equal(okc.notes, "spans four counties, use per county");
+
+  const book = new ExcelJS.Workbook();
+  const file = await buildDirectoryWorkbook(saved, { title: "t", builtOn: "2026-09-15" });
+  await book.xlsx.load(file as unknown as ArrayBuffer);
+  assert.deepEqual(book.worksheets.map((w) => w.name), ["Read me", "Tax filing codes", "All governments (FIPS)", "By state"]);
+  const code = book.getWorksheet("Tax filing codes")!.getRow(2).getCell(4).value;
+  assert.equal(code, "5521", "a code is text, never a number");
 });

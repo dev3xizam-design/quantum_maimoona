@@ -44,3 +44,6 @@ next-env.d.ts
 # generated worksheets
 *.xlsx
 .neon
+
+# generated from data/jurisdictions by `npm run db:jurisdictions -- --files` (runs in build)
+/public/downloads/

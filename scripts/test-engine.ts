@@ -146,7 +146,7 @@ test("Wyoming county rates that already include the state rate are not double co
   const r = computeSales(rows, {
     config: { ...baseConfig, state: "WY", stateRate: 0.04, hasLocal: true, allocation: "county" },
     codes: [
-      { jurisdictionName: "Goshen", jurisdictionType: "county", officialCode: "0800", pairedCode: null, pairedName: null, rate: 0.0525, rateIncludesState: true, avalaraAlias: null },
+      { jurisdictionName: "Goshen", jurisdictionType: "county", officialCode: "0700", pairedCode: null, pairedName: null, rate: 0.0525, rateIncludesState: true, avalaraAlias: null },
     ],
     period: "2026-07",
   });
@@ -738,4 +738,71 @@ test("state names and codes both resolve", async () => {
   assert.equal(normalizeState("District of Columbia"), "DC");
   assert.equal(normalizeState(""), null);
   assert.equal(normalizeState("Ontario"), null, "a Canadian province is not a US state");
+});
+
+/* ------------------------------------------------------------------ */
+/* Jurisdiction directory                                              */
+/* ------------------------------------------------------------------ */
+
+test("promoting directory codes never replaces a verified code under the same engine key", async () => {
+  const { planPromotion } = await import("../src/lib/jurisdictions/promote");
+  const existing = [
+    { jurisdictionType: "city", jurisdictionName: "Oklahoma City", officialCode: "5521", avalaraAlias: "Edmond" },
+    { jurisdictionType: "county", jurisdictionName: "Tulsa", officialCode: "7288", avalaraAlias: null },
+  ];
+  const plan = planPromotion(
+    [
+      // OKC's other county portion: the name is taken, so it must not go in.
+      { jurisdictionType: "city", jurisdictionName: "Oklahoma City", officialCode: "0921" },
+      // Edmond is an alias of OKC in the engine - a real Edmond row would hijack it.
+      { jurisdictionType: "city", jurisdictionName: "Edmond", officialCode: "5507" },
+      // "Tulsa County" normalises to the same key as "Tulsa".
+      { jurisdictionType: "county", jurisdictionName: "Tulsa County", officialCode: "7288" },
+      // Split across two counties, neither in the engine yet: a person must choose.
+      { jurisdictionType: "city", jurisdictionName: "Norman", officialCode: "1409" },
+      { jurisdictionType: "city", jurisdictionName: "Norman", officialCode: "1410" },
+      // Free key, listed twice with the same code: added once.
+      { jurisdictionType: "city", jurisdictionName: "Duncan", officialCode: "6911" },
+      { jurisdictionType: "city", jurisdictionName: "Duncan", officialCode: "6911" },
+      // Same name as a county, different type: its own key.
+      { jurisdictionType: "city", jurisdictionName: "Tulsa", officialCode: "7205" },
+      // No published code: listed in the directory, never a filing code.
+      { jurisdictionType: "special", jurisdictionName: "Some District", officialCode: "" },
+    ],
+    existing,
+  );
+  assert.deepEqual(plan.add.map((c) => c.officialCode), ["6911", "7205"]);
+  assert.deepEqual(plan.alreadyPresent.map((c) => c.officialCode), ["0921", "5507", "7288"]);
+  assert.deepEqual(plan.ambiguous.map((c) => c.officialCode), ["1409", "1410"]);
+  assert.deepEqual(plan.noCode.map((c) => c.jurisdictionName), ["Some District"]);
+});
+
+test("directory types map onto the only types the engine looks up", async () => {
+  const { engineType, engineRate } = await import("../src/lib/jurisdictions/directory");
+  assert.equal(engineType("parish"), "county");
+  assert.equal(engineType("region"), "county");
+  assert.equal(engineType("village"), "city");
+  assert.equal(engineType("transit"), "special");
+  // WY/AZ publish a combined rate; everywhere else the engine holds the local portion.
+  assert.equal(engineRate({ localRate: "0.01", combinedRate: "0.05", rateIncludesState: true }), "0.05");
+  assert.equal(engineRate({ localRate: "0.01", combinedRate: "0.05", rateIncludesState: false }), "0.01");
+  const { isPromotable } = await import("../src/lib/jurisdictions/directory");
+  assert.equal(isPromotable({ category: "tax", officialCode: "0101", codeSystem: "WY DOR lodging tax code (not for sales tax)" }), false);
+  assert.equal(isPromotable({ category: "government", officialCode: "56025", codeSystem: "Census FIPS" }), false);
+  assert.equal(isPromotable({ category: "tax", officialCode: "0100", codeSystem: "WY DOR jurisdiction digit code" }), true);
+});
+
+test("the directory CSV is refused whole when any row is bad, and codes keep leading zeros", async () => {
+  const { parseDirectoryCsv, directoryToCsv, DIRECTORY_COLUMNS } = await import("../src/lib/jurisdictions/directory");
+  const head = DIRECTORY_COLUMNS.join(",");
+  const good = "tax,WY,Natrona,county,0100,WY county number,Natrona County,,,0.01,0.05,true,2026-01-01,,https://x,";
+  const rows = parseDirectoryCsv(`﻿${head}\n${good}\n`);
+  assert.equal(rows[0].officialCode, "0100");
+  assert.equal(rows[0].rateIncludesState, true);
+  assert.equal(rows[0].effectiveTo, null);
+  assert.match(directoryToCsv(rows), /,0100,/);
+
+  assert.throws(() => parseDirectoryCsv(`${head}\n${good}\n${good.replace("0.05", "5.0")}\n`), /line 3: combined_rate/);
+  assert.throws(() => parseDirectoryCsv(`${head}\n${good.replace("WY", "PR")}\n`), /unknown state/);
+  assert.throws(() => parseDirectoryCsv(`state,name\nWY,x\n`), /missing columns/);
 });

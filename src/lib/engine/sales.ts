@@ -53,7 +53,8 @@ function signedValue(v: number, ret: boolean): number {
   return ret ? -Math.abs(v) : v;
 }
 
-function codeKey(name: string | null | undefined) {
+/** Exported so the directory promotion detects exactly the collisions this index would have. */
+export function codeKey(name: string | null | undefined) {
   return norm(name).replace(/\s+(county|parish|city)$/i, "");
 }
 

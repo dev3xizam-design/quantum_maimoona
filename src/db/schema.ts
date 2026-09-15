@@ -153,6 +153,44 @@ export const jurisdictionCodes = pgTable(
   (t) => [index("jc_lookup_idx").on(t.state, t.jurisdictionType, t.jurisdictionName)],
 );
 
+/**
+ * Nationwide REFERENCE directory - every US tax jurisdiction the state revenue
+ * departments publish codes for, plus every county, incorporated place and active
+ * township from the Census. Loaded from data/jurisdictions/us-jurisdictions.csv.
+ *
+ * The engine never reads this table. Rows reach a return only once someone
+ * promotes them into jurisdiction_codes - a bulk load straight into that table
+ * would let same-named rows (Oklahoma City's four county portions) overwrite the
+ * verified code, and would switch on rates nobody has checked against a return.
+ */
+export const jurisdictionDirectory = pgTable(
+  "jurisdiction_directory",
+  {
+    id: serial("id").primaryKey(),
+    /** tax = a code a state revenue department publishes | government = Census FIPS */
+    category: text("category").notNull(),
+    state: text("state").notNull(),
+    jurisdictionName: text("jurisdiction_name").notNull(),
+    jurisdictionType: text("jurisdiction_type").notNull(),
+    officialCode: text("official_code").notNull(),
+    codeSystem: text("code_system").notNull(),
+    countyName: text("county_name"),
+    pairedCode: text("paired_code"),
+    pairedName: text("paired_name"),
+    localRate: numeric("local_rate", { precision: 12, scale: 8 }),
+    combinedRate: numeric("combined_rate", { precision: 12, scale: 8 }),
+    rateIncludesState: boolean("rate_includes_state").notNull().default(false),
+    effectiveFrom: date("effective_from"),
+    effectiveTo: date("effective_to"),
+    sourceUrl: text("source_url"),
+    notes: text("notes"),
+  },
+  (t) => [
+    index("jd_state_cat_idx").on(t.state, t.category, t.jurisdictionType),
+    index("jd_code_idx").on(t.officialCode),
+  ],
+);
+
 export const exciseConfig = pgTable(
   "excise_config",
   {
