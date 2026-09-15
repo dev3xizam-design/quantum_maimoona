@@ -412,6 +412,33 @@ export const changeLog = pgTable("change_log", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+/**
+ * One row per state per refresh attempt, written by the jurisdiction refresh
+ * running on the OpenClaw server. Quantum keeps the last good data for a state
+ * whose download looks broken, and this says so out loud.
+ */
+export const jurisdictionRefreshRuns = pgTable(
+  "jurisdiction_refresh_runs",
+  {
+    id: serial("id").primaryKey(),
+    state: text("state").notNull(),
+    /** applied | rejected | failed */
+    status: text("status").notNull(),
+    source: text("source"),
+    sourceUrls: jsonb("source_urls").$type<string[]>(),
+    rowsReceived: integer("rows_received").notNull().default(0),
+    rowsBefore: integer("rows_before").notNull().default(0),
+    codesAdded: integer("codes_added").notNull().default(0),
+    codesClosed: integer("codes_closed").notNull().default(0),
+    /** Why a refresh was rejected, or what broke. */
+    message: text("message"),
+    changes: jsonb("changes").$type<Record<string, unknown>>(),
+    fetchedAt: timestamp("fetched_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("jrr_state_idx").on(t.state, t.createdAt)],
+);
+
 export const runLog = pgTable("run_log", {
   id: serial("id").primaryKey(),
   period: text("period").notNull(),

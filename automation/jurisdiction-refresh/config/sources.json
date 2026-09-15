@@ -1,0 +1,227 @@
+{
+  "_comment": "Where each state's jurisdiction codes come from. Government sources only. A quarterly file usually changes its name (pub17000726.xlsx, Q426_..._rates-alpha.xlsx), so most entries DISCOVER the current file from an index page instead of hardcoding a link. 'status': ready = downloaded and parsed by this runner; adapter-needed = the source is known and recorded here, but its parser is not written yet, so the state keeps the data loaded from the first build until someone adds one.",
+  "_settings": {
+    "userAgent": "Quantum tax automation (Maximum Vapor Inc.) - jurisdiction code refresh",
+    "timeoutSeconds": 120,
+    "retries": 3,
+    "politeDelaySeconds": 2
+  },
+  "sources": [
+    {
+      "id": "sst",
+      "kind": "sst",
+      "name": "Streamlined Sales Tax rate files",
+      "status": "ready",
+      "indexUrl": "https://www.streamlinedsalestax.org/ratesandboundry/Rates",
+      "linkPattern": "(?P<state>[A-Z]{2})R(?P<year>\\d{4})Q(?P<quarter>\\d)[A-Za-z0-9]*\\.(csv|zip|CSV|ZIP)",
+      "states": [
+        "AR",
+        "GA",
+        "IA",
+        "IN",
+        "KS",
+        "KY",
+        "MI",
+        "MN",
+        "NC",
+        "ND",
+        "NE",
+        "NJ",
+        "NV",
+        "OH",
+        "OK",
+        "RI",
+        "SD",
+        "TN",
+        "UT",
+        "VT",
+        "WA",
+        "WI",
+        "WV",
+        "WY"
+      ],
+      "notes": "One directory listing, one file per state, one format: state FIPS, jurisdiction type (45 state, 00 county, 01 city, others special), jurisdiction FIPS, rates, begin and end dates. Names come from the Census county and place files."
+    },
+    {
+      "id": "al-aldor",
+      "kind": "table",
+      "state": "AL",
+      "name": "ALDOR local tax rates",
+      "status": "ready",
+      "fileUrl": "https://www.revenue.alabama.gov/wp-content/uploads/2024/03/taxrates_current.csv",
+      "format": "csv",
+      "codeSystem": "ALDOR locality code",
+      "notes": "Stable filename, updated in place. One row per locality per tax type (sales, sellers use, consumers use)."
+    },
+    {
+      "id": "tx-comptroller",
+      "kind": "table",
+      "state": "TX",
+      "name": "Texas Comptroller city rates",
+      "status": "ready",
+      "fileUrl": "https://comptroller.texas.gov/taxes/sales/docs/city-rates.xlsx",
+      "format": "xlsx",
+      "codeSystem": "TX Comptroller local code",
+      "notes": "Stable filename. City, county, transit and special district codes; the Comptroller also publishes county-rates.xlsx, transit-rates.xlsx and spd-rates.xlsx alongside it."
+    },
+    {
+      "id": "az-adortpt",
+      "kind": "table",
+      "state": "AZ",
+      "name": "ADOR TPT rate table",
+      "status": "ready",
+      "indexUrl": "https://azdor.gov/transaction-privilege-tax/tax-rate-table",
+      "linkPattern": "TPT_RATETABLE_ALL_(?P<date>\\d{8})\\.csv",
+      "format": "csv",
+      "codeSystem": "AZ ADOR TPT region/city code",
+      "notes": "Filename carries the effective date; take the newest that is not in the future."
+    },
+    {
+      "id": "wa-dor",
+      "kind": "table",
+      "state": "WA",
+      "name": "WA DOR local sales & use tax rates by location code",
+      "status": "ready",
+      "indexUrl": "https://dor.wa.gov/taxes-rates/sales-and-use-tax-rates/local-sales-use-tax-rates-and-changes",
+      "linkPattern": "Q(?P<quarter>\\d)(?P<year>\\d{2})_Excel_LSU-rates-alpha\\.xlsx",
+      "format": "xlsx",
+      "codeSystem": "WA location code",
+      "notes": "Quarterly, new filename each quarter."
+    },
+    {
+      "id": "nc-ncdor",
+      "kind": "table",
+      "state": "NC",
+      "name": "NCDOR total sales & use tax rates",
+      "status": "adapter-needed",
+      "indexUrl": "https://www.ncdor.gov/taxes-forms/sales-and-use-tax/sales-and-use-tax-rates-other-information",
+      "linkPattern": "Total%20Current%20S%26U%20Tax%20Rates[^\"']*\\.csv",
+      "codeSystem": "NCDOR E-536 county code"
+    },
+    {
+      "id": "mn-dor",
+      "kind": "table",
+      "state": "MN",
+      "name": "MN DOR tax type codes",
+      "status": "adapter-needed",
+      "indexUrl": "https://www.revenue.state.mn.us/sales-tax-rate-calculator",
+      "linkPattern": "tax-type-codes\\.xlsx",
+      "codeSystem": "MN tax type code"
+    },
+    {
+      "id": "mo-dor",
+      "kind": "table",
+      "state": "MO",
+      "name": "MO DOR sales tax rate tables",
+      "status": "adapter-needed",
+      "indexUrl": "https://dor.mo.gov/taxation/business/tax-types/sales-use/rate-tables/",
+      "linkPattern": "(?P<month>[a-z]+)(?P<year>\\d{4})\\.xlsx",
+      "codeSystem": "MO DOR jurisdiction code"
+    },
+    {
+      "id": "ks-kdor",
+      "kind": "table",
+      "state": "KS",
+      "name": "KDOR Pub KS-1700 jurisdiction codes",
+      "status": "adapter-needed",
+      "indexUrl": "https://www.ksrevenue.gov/salesratechanges.html",
+      "linkPattern": "pub1700(?P<date>\\d{4})\\.xlsx",
+      "codeSystem": "KS DOR jurisdiction code"
+    },
+    {
+      "id": "ar-dfa",
+      "kind": "table",
+      "state": "AR",
+      "name": "AR DFA city & county tax table",
+      "status": "adapter-needed",
+      "indexUrl": "https://www.dfa.arkansas.gov/excise-tax/sales-use-tax/city-county-tax-rates/",
+      "linkPattern": "cityCountyTaxTable_[A-Za-z]+_[A-Za-z]+_\\d{4}\\.xls",
+      "codeSystem": "AR DFA local code"
+    },
+    {
+      "id": "sd-dor",
+      "kind": "table",
+      "state": "SD",
+      "name": "SD DOR municipal tax schedule",
+      "status": "adapter-needed",
+      "indexUrl": "https://dor.sd.gov/businesses/taxes/sales-use-tax/",
+      "linkPattern": "municipal-sj-tax-schedule-\\d{4}-\\d{2}\\.xlsx",
+      "codeSystem": "SD DOR municipal code"
+    },
+    {
+      "id": "ca-cdtfa",
+      "kind": "table",
+      "state": "CA",
+      "name": "CDTFA city & county rates",
+      "status": "adapter-needed",
+      "indexUrl": "https://www.cdtfa.ca.gov/taxes-and-fees/sales-use-tax-rates.htm",
+      "linkPattern": "SalesTaxRates\\d{2}-\\d{2}-\\d{2}\\.xlsx",
+      "codeSystem": "CA CDTFA tax area code"
+    },
+    {
+      "id": "il-idor",
+      "kind": "table",
+      "state": "IL",
+      "name": "IDOR location code rates",
+      "status": "adapter-needed",
+      "indexUrl": "https://tax.illinois.gov/research/taxrates/sales.html",
+      "linkPattern": "AllCountyCityDist\\d{4}[a-z]?\\.xlsx",
+      "codeSystem": "IDOR location code"
+    },
+    {
+      "id": "va-tax",
+      "kind": "table",
+      "state": "VA",
+      "name": "Virginia Tax sales tax rates",
+      "status": "adapter-needed",
+      "fileUrl": "https://www.tax.virginia.gov/sites/default/files/inline-files/sales-tax-rates.xlsx",
+      "codeSystem": "Virginia Tax locality code"
+    },
+    {
+      "id": "ms-dor",
+      "kind": "table",
+      "state": "MS",
+      "name": "MS DOR city & county list",
+      "status": "adapter-needed",
+      "fileUrl": "https://www.dor.ms.gov/sites/default/files/business/sales_city_county_list.xls",
+      "codeSystem": "MS DOR county/city number"
+    },
+    {
+      "id": "ak-arsstc",
+      "kind": "table",
+      "state": "AK",
+      "name": "Alaska Remote Seller Sales Tax Commission rate sheet",
+      "status": "adapter-needed",
+      "indexUrl": "https://arsstc.org/resources/",
+      "linkPattern": "ARSSTC-Sales-Tax-Rate-Sheet-[\\d-]+\\.xlsx",
+      "codeSystem": "AK ARSSTC code"
+    },
+    {
+      "id": "ok-otc",
+      "kind": "pdf",
+      "state": "OK",
+      "name": "OTC sales tax rate chart (COPO codes)",
+      "status": "adapter-needed",
+      "indexUrl": "https://oklahoma.gov/tax/businesses/sales-use-tax.html",
+      "linkPattern": "copo\\dQ\\d{2}\\.pdf",
+      "codeSystem": "OK COPO",
+      "notes": "PDF only - needs a pdfplumber adapter."
+    },
+    {
+      "id": "wy-dor",
+      "kind": "pdf",
+      "state": "WY",
+      "name": "WY DOR jurisdiction table and rate chart",
+      "status": "adapter-needed",
+      "indexUrl": "https://excise-tax-div.wyo.gov/salesuselodging-tax/salesuselodging-returns",
+      "codeSystem": "WY DOR jurisdiction digit code",
+      "notes": "Linked through Google Drive - needs a browser fetch."
+    }
+  ],
+  "_refreshableStates": {
+    "_comment": "Only these states may be SENT to Quantum, because the ready adapters here reproduce the code system that state's return actually uses. Everything else is downloaded and parsed into state/snapshots for review, and left alone in Quantum - an SST-only refresh of Oklahoma would replace its COPO codes with FIPS codes and break the return. Add a state here when its adapter lands. TX, AZ and WA have parsers but need one verified run from the US server before they are added here.",
+    "states": [
+      "AL"
+    ]
+  }
+}

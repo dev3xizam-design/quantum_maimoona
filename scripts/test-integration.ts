@@ -955,3 +955,58 @@ test("adding every state at once keeps verified codes, never collides, and undoe
   assert.equal(removed, first.added);
   assert.equal((await db.select().from(schema.jurisdictionCodes)).length, seeded.length);
 });
+
+test("a refreshed state loads, adds and closes codes, and a broken download is refused", async () => {
+  const { db } = await import("../src/db");
+  const { applyStateRefresh } = await import("../src/lib/jurisdictions/refresh");
+  const { parseDirectoryCsv, DIRECTORY_COLUMNS } = await import("../src/lib/jurisdictions/directory");
+  const { eq, and } = await import("drizzle-orm");
+
+  const head = DIRECTORY_COLUMNS.join(",");
+  const row = (name: string, code: string, county = "Zeta County") =>
+    `tax,RI,${name},city,${code},RI DOR code,${county},,,0.01,0.07,false,,,https://tax.ri.gov,`;
+  const csv = (...rs: string[]) => [head, ...rs].join("\n");
+
+  await db.delete(schema.jurisdictionDirectory).where(eq(schema.jurisdictionDirectory.state, "RI"));
+  await db.delete(schema.jurisdictionCodes).where(eq(schema.jurisdictionCodes.state, "RI"));
+  // A code a person entered by hand: a download must never touch it.
+  await db.insert(schema.jurisdictionCodes).values({
+    state: "RI", jurisdictionName: "Handmade", jurisdictionType: "city", officialCode: "H1",
+    effectiveFrom: "2026-01-01", notes: "entered by the preparer",
+  });
+
+  const first = await applyStateRefresh(
+    { state: "RI", rows: parseDirectoryCsv(csv(row("Alpha", "A1"), row("Beta", "B1"), row("Gamma", "G1"))) },
+    "test",
+  );
+  assert.equal(first.status, "applied");
+  assert.equal(first.codesAdded, 3);
+
+  // Beta is gone from the state's file and Delta is new.
+  const second = await applyStateRefresh(
+    { state: "RI", rows: parseDirectoryCsv(csv(row("Alpha", "A1"), row("Gamma", "G1"), row("Delta", "D1"))) },
+    "test",
+  );
+  assert.equal(second.status, "applied");
+  assert.equal(second.codesAdded, 1, "Delta");
+  assert.equal(second.codesClosed, 1, "Beta");
+
+  const codes = await db.select().from(schema.jurisdictionCodes).where(eq(schema.jurisdictionCodes.state, "RI"));
+  const beta = codes.find((c) => c.jurisdictionName === "Beta")!;
+  assert.ok(beta.effectiveTo, "a dropped code is closed, not deleted - past returns keep it");
+  assert.equal(codes.find((c) => c.officialCode === "H1")?.effectiveTo, null, "the hand-entered code is untouched");
+  assert.ok(codes.every((c) => c.rate === null), "a refresh never switches on a rate");
+
+  // The state's file breaks and returns one row: keep what we have.
+  const broken = await applyStateRefresh({ state: "RI", rows: parseDirectoryCsv(csv(row("Alpha", "A1"))) }, "test");
+  assert.equal(broken.status, "rejected");
+  assert.match(broken.message, /Keeping the old data/);
+  const after = await db
+    .select()
+    .from(schema.jurisdictionDirectory)
+    .where(and(eq(schema.jurisdictionDirectory.state, "RI"), eq(schema.jurisdictionDirectory.category, "tax")));
+  assert.equal(after.length, 3, "the directory still holds the last good delivery");
+
+  const runs = await db.select().from(schema.jurisdictionRefreshRuns).where(eq(schema.jurisdictionRefreshRuns.state, "RI"));
+  assert.deepEqual(runs.map((r) => r.status), ["applied", "applied", "rejected"]);
+});

@@ -47,3 +47,6 @@ next-env.d.ts
 
 # generated from data/jurisdictions by `npm run db:jurisdictions -- --files` (runs in build)
 /public/downloads/
+
+# refresh working data (snapshots, census lists, last run)
+/automation/jurisdiction-refresh/state/
