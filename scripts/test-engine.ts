@@ -892,3 +892,21 @@ test("a hand-entered code beats a directory code under the same name", () => {
     assert.equal(r.byCounty[0].code, "1111", "load order must not decide which code is filed");
   }
 });
+
+test("Texas returns list taxing authorities; other states keep the destination-county table", async () => {
+  const { allocationLines } = await import("../src/lib/engine/sales");
+  const rows = [
+    line("INV1", "1", "State", { amount: 100, taxable: 100, tax: 6.25 }, { state: "TX", destCounty: "HARRIS", destCity: "HOUSTON", jurisdictionDescription: "TEXAS" }),
+    line("INV1", "1", "City", { amount: 100, taxable: 100, tax: 1 }, { state: "TX", destCounty: "HARRIS", destCity: "HOUSTON", jurisdictionDescription: "HOUSTON" }),
+    line("INV1", "1", "Special Tax Jurisdiction", { amount: 100, taxable: 100, tax: 1 }, { state: "TX", destCounty: "HARRIS", destCity: "HOUSTON", jurisdictionDescription: "HOUSTON MTA TRANSIT" }),
+  ];
+  const codes = [txCode("city", "Houston", "2101017"), txCode("special", "Houston MTA", "3101990")];
+  const tx = computeSales(rows, { config: txConfig, period: "2026-08", codes });
+  const lines = allocationLines(tx);
+  assert.deepEqual(lines.map((l) => `${l.name}=${l.code}`).sort(), ["HOUSTON MTA TRANSIT=3101990", "HOUSTON=2101017"]);
+  assert.ok(!lines.some((l) => l.name === "HARRIS"), "Harris County levies nothing and is not a return line");
+  assert.equal(round2(lines.reduce((a, l) => a + l.tax, 0)), tx.localTaxCollected);
+
+  const other = computeSales(rows.map((r) => ({ ...r, state: "XX" })), { config: { ...txConfig, state: "XX", allocation: "county" }, period: "2026-08", codes });
+  assert.deepEqual(allocationLines(other).map((l) => l.name), ["HARRIS"]);
+});

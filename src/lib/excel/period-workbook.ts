@@ -9,6 +9,7 @@ import ExcelJS from "exceljs";
 import { fmtPct, round2 } from "@/lib/money";
 import { periodLabel } from "@/lib/periods";
 import { rateUnitLabel } from "@/lib/engine/excise";
+import { allocationLabel, allocationLines } from "@/lib/engine/sales";
 import type { StateBundle, PeriodComputation } from "@/lib/period";
 import { STATE_NAMES } from "@/lib/states";
 import { salesFormFor } from "./forms/sales";
@@ -305,9 +306,9 @@ function stateTab(wb: ExcelJS.Workbook, b: StateBundle, company: string, fein: s
     ws.addRow(["", "Rounding", s.rounding === "whole_dollar" ? "Whole dollars" : "Cents", ""]);
     spacer(ws);
 
-    const allocated = s.byCounty.filter((l) => l.gross !== 0 || l.tax !== 0);
+    const allocated = allocationLines(s);
     if (s.allocation !== "flat" && allocated.length) {
-      sectionRow(ws, "Jurisdiction allocation", 4);
+      sectionRow(ws, allocationLabel(s), 4);
       headerRow(ws, ["Code", "Jurisdiction", "Taxable", "Tax"]);
       for (const l of allocated) {
         const row = ws.addRow([l.code ?? "MISSING", l.name, l.taxable, l.tax]);

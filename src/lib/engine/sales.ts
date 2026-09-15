@@ -366,6 +366,32 @@ export function computeSales(
   };
 }
 
+/**
+ * The local lines a state's return actually lists.
+ *
+ * Most states file by destination county, so the county rollup is the return.
+ * Texas files by local TAXING AUTHORITY: each city, taxing county, transit
+ * authority and special district that collected tax, under its Comptroller
+ * code. Travis or Harris County levies nothing, so a destination-county table
+ * shows it as "missing" when there is nothing to file - and hides the transit
+ * and district lines that do need filing.
+ */
+export function allocationLines(r: SalesResult): JurisdictionLine[] {
+  if (r.state === "TX") {
+    return r.byJurisdiction
+      .filter((l) => norm(l.type) !== "state" && (l.taxable !== 0 || l.tax !== 0))
+      .sort((a, b) => b.tax - a.tax);
+  }
+  return r.byCounty.filter((l) => l.gross !== 0 || l.tax !== 0);
+}
+
+/** Heading for allocationLines, so every screen and workbook says what the rows are. */
+export function allocationLabel(r: SalesResult): string {
+  return r.state === "TX"
+    ? "Local taxing authorities (Comptroller codes - city, taxing county, transit, special district)"
+    : "Jurisdiction allocation";
+}
+
 function lineIncludesState(line: JurisdictionLine, codes: JurisdictionCode[]): boolean {
   return codes.some(
     (c) => codeKey(c.jurisdictionName) === codeKey(line.name) && c.rateIncludesState,

@@ -14,6 +14,7 @@ import ExcelJS from "exceljs";
 import { round2, fmtPct } from "@/lib/money";
 import { periodLabel } from "@/lib/periods";
 import { rateUnitLabel } from "@/lib/engine/excise";
+import { allocationLabel, allocationLines } from "@/lib/engine/sales";
 import type { AnyResult, ExciseResult, PactResult, SalesResult } from "@/lib/engine/types";
 import { salesFormFor } from "./forms/sales";
 import { exciseFormFor } from "./forms/excise";
@@ -162,14 +163,29 @@ function jurisdictionSheet(wb: ExcelJS.Workbook, r: SalesResult) {
   titleRow(ws, `${r.state} - jurisdiction allocation - ${r.periodLabel}`, 9);
   spacer(ws);
 
-  sectionRow(ws, "By destination county (from deduped sale lines)", 9);
+  if (r.state === "TX") {
+    // Texas files by taxing authority, not destination county - see allocationLines.
+    sectionRow(ws, allocationLabel(r), 9);
+    headerRow(ws, ["Type", "Jurisdiction", "Code", "", "", "", "Taxable", "Rate", "Tax"]);
+    for (const l of allocationLines(r)) {
+      const row = ws.addRow([l.type, l.name, l.code ?? "MISSING", "", "", "", l.taxable, l.rate, l.tax]);
+      [7, 9].forEach((i) => (row.getCell(i).numFmt = MONEY_FMT));
+      row.getCell(8).numFmt = PCT_FMT;
+      if (!l.code) fill(row.getCell(3), `FF${WARN}`);
+    }
+    spacer(ws);
+    noteRow(ws, "Destination counties with no county sales tax (Travis, Harris, Dallas...) have no Comptroller code and no line on the return.", "note", 9);
+    spacer(ws);
+  }
+
+  sectionRow(ws, r.state === "TX" ? "By destination county (reference only - not return lines)" : "By destination county (from deduped sale lines)", 9);
   headerRow(ws, ["Type", "Jurisdiction", "Code", "Paired code", "Gross", "Exempt", "Taxable", "Rate", "Tax"]);
   for (const l of r.byCounty) {
     if (l.gross === 0 && l.taxable === 0 && l.tax === 0) continue;
     const row = ws.addRow([
       l.type,
       l.name,
-      l.code ?? "MISSING",
+      l.code ?? (r.state === "TX" ? "" : "MISSING"),
       l.pairedCode ?? "",
       l.gross,
       l.exempt,
@@ -179,7 +195,7 @@ function jurisdictionSheet(wb: ExcelJS.Workbook, r: SalesResult) {
     ]);
     [5, 6, 7, 9].forEach((i) => (row.getCell(i).numFmt = MONEY_FMT));
     row.getCell(8).numFmt = PCT_FMT;
-    if (!l.code) fill(row.getCell(3), `FF${WARN}`);
+    if (!l.code && r.state !== "TX") fill(row.getCell(3), `FF${WARN}`);
   }
   spacer(ws);
 
@@ -191,7 +207,7 @@ function jurisdictionSheet(wb: ExcelJS.Workbook, r: SalesResult) {
       const row = ws.addRow([
         l.type,
         l.name,
-        l.code ?? "MISSING",
+        l.code ?? (r.state === "TX" ? "" : "MISSING"),
         l.pairedCode ?? "",
         l.gross,
         l.exempt,
@@ -206,7 +222,8 @@ function jurisdictionSheet(wb: ExcelJS.Workbook, r: SalesResult) {
     spacer(ws);
   }
 
-  if (r.allocation === "city_county") {
+  // Paired city + county COPO rows are Oklahoma's format; Texas codes are never paired.
+  if (r.allocation === "city_county" && r.state === "OK") {
     sectionRow(ws, "Portal import format (code, net taxable) - paired city AND county rows", 9);
     headerRow(ws, ["Code", "Net taxable"]);
     for (const l of r.byCity) {

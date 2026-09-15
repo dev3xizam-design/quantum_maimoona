@@ -10,6 +10,7 @@ import type { AnyResult } from "@/lib/engine/types";
 import { StatusBadge } from "@/components/StatusBadge";
 import { FiledForm } from "./FiledForm";
 import { RecomputeButton } from "./RecomputeButton";
+import { allocationLabel, allocationLines } from "@/lib/engine/sales";
 
 export const dynamic = "force-dynamic";
 
@@ -126,7 +127,7 @@ export default async function ReturnPage({
               {(result.byCounty.length > 1 || result.allocation !== "flat") && (
                 <section className="panel overflow-hidden">
                   <h2 className="border-b border-[var(--line)] px-4 py-3 text-[13px] font-semibold">
-                    Jurisdiction allocation
+                    {allocationLabel(result)}
                   </h2>
                   <table className="qtable">
                     <thead>
@@ -142,10 +143,8 @@ export default async function ReturnPage({
                       </tr>
                     </thead>
                     <tbody>
-                      {result.byCounty
-                        .filter((l) => l.gross !== 0 || l.tax !== 0)
-                        .map((l) => (
-                          <tr key={l.name}>
+                      {allocationLines(result).map((l) => (
+                          <tr key={`${l.type}|${l.name}`}>
                             <td>{l.name}</td>
                             <td className={l.code ? "font-mono text-[12px]" : "text-[var(--danger)]"}>
                               {l.code ?? "missing"}

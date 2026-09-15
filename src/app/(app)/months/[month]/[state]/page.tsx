@@ -7,6 +7,7 @@ import { computeFiling } from "@/lib/compute";
 import { fmtMoney, fmtPct } from "@/lib/money";
 import { periodLabel } from "@/lib/periods";
 import { rateUnitLabel } from "@/lib/engine/excise";
+import { allocationLabel, allocationLines } from "@/lib/engine/sales";
 import { salesFormFor } from "@/lib/excel/forms/sales";
 import type { ExciseResult, PactResult, SalesResult } from "@/lib/engine/types";
 import { stateName } from "@/lib/states";
@@ -146,8 +147,11 @@ export default async function StateMonthPage({
                 </div>
               </div>
 
-              {s.allocation !== "flat" && s.byCounty.some((l) => l.gross !== 0 || l.tax !== 0) && (
+              {s.allocation !== "flat" && allocationLines(s).length > 0 && (
                 <table className="qtable">
+                  <caption className="px-4 pt-3 text-left text-[12px] font-semibold text-[var(--muted)]">
+                    {allocationLabel(s)}
+                  </caption>
                   <thead>
                     <tr>
                       <th>Jurisdiction</th>
@@ -159,10 +163,8 @@ export default async function StateMonthPage({
                     </tr>
                   </thead>
                   <tbody>
-                    {s.byCounty
-                      .filter((l) => l.gross !== 0 || l.tax !== 0)
-                      .map((l) => (
-                        <tr key={l.name} className={l.code ? "" : "flagged"}>
+                    {allocationLines(s).map((l) => (
+                        <tr key={`${l.type}|${l.name}`} className={l.code ? "" : "flagged"}>
                           <td>{l.name}</td>
                           <td className={l.code ? "font-mono text-[11.5px]" : "text-[var(--danger)]"}>
                             {l.code ?? "missing"}
