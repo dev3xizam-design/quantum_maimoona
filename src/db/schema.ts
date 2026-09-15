@@ -145,6 +145,8 @@ export const jurisdictionCodes = pgTable(
     rateIncludesState: boolean("rate_includes_state").notNull().default(false),
     /** Avalara's jurisdiction description that maps here (e.g. "Edmond" -> OKC). */
     avalaraAlias: text("avalara_alias"),
+    /** County the code belongs to; picks between a city's per-county codes ("A; B" for several). */
+    countyName: text("county_name"),
     notes: text("notes"),
     effectiveFrom: date("effective_from").notNull(),
     effectiveTo: date("effective_to"),

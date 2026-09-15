@@ -71,6 +71,8 @@ export type SalesResult = {
   byJurisdiction: JurisdictionLine[];
   byCounty: JurisdictionLine[];
   byCity: JurisdictionLine[];
+  /** Location-model states only (see RETURN_MODEL); absent on results stored before it existed. */
+  byLocation?: JurisdictionLine[];
   notes: string[];
   warnings: string[];
 };

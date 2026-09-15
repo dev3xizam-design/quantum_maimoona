@@ -84,6 +84,7 @@ export async function resolveJurisdictionCodes(
     rateIncludesState: r.rateIncludesState,
     avalaraAlias: r.avalaraAlias,
     fromDirectory: r.notes?.startsWith(DIRECTORY_NOTE) ?? false,
+    countyName: r.countyName,
   }));
 }
 

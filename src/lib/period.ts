@@ -229,6 +229,7 @@ export async function computePeriodEverything(
             rateIncludesState: c.rateIncludesState,
             avalaraAlias: c.avalaraAlias,
             fromDirectory: c.notes?.startsWith(DIRECTORY_NOTE) ?? false,
+            countyName: c.countyName,
           }));
         try {
           sales = computeSales(txFor(state, salesPeriod), { config, codes, period: salesPeriod });

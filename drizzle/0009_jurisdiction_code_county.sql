@@ -1,0 +1,1 @@
+ALTER TABLE "jurisdiction_codes" ADD COLUMN "county_name" text;

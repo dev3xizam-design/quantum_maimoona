@@ -156,6 +156,7 @@ export async function saveJurisdictionCode(formData: FormData) {
     rate: numStr(formData, "rate"),
     rateIncludesState: bool(formData, "rateIncludesState"),
     avalaraAlias: str(formData, "avalaraAlias"),
+    countyName: str(formData, "countyName"),
     notes: str(formData, "notes"),
     effectiveFrom: str(formData, "effectiveFrom") ?? "2026-01-01",
     updatedAt: new Date(),

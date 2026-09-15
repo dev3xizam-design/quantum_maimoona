@@ -887,6 +887,8 @@ test("the jurisdiction directory loads, and its Excel keeps codes as text", asyn
   assert.equal(code, "5521", "a code is text, never a number");
 });
 
+const added0 = <T extends { notes: string | null }>(rows: T[]) => rows.filter((c) => c.notes?.startsWith("From directory ("));
+
 test("adding every state at once keeps verified codes, never collides, and undoes cleanly", async () => {
   const { db } = await import("../src/db");
   const { parseDirectoryCsv } = await import("../src/lib/jurisdictions/directory");
@@ -918,15 +920,25 @@ test("adding every state at once keeps verified codes, never collides, and undoe
     const now = all.find((c) => c.id === s.id);
     assert.equal(now?.officialCode, s.officialCode, `${s.state} ${s.jurisdictionName} was altered`);
   }
-  // No two codes share an engine key within a state - the index would silently drop one.
-  const keys = new Map<string, string>();
-  for (const c of all) {
+  // Directory codes sharing an engine key must be told apart by county (TX has
+  // two Oak Ridges; Tulsa has a code per county) or be the same code - otherwise
+  // the engine could not choose and a line would go unfiled.
+  const shared = new Map<string, typeof all>();
+  for (const c of added0(all)) {
     for (const name of [c.jurisdictionName, c.avalaraAlias]) {
       if (!name) continue;
       const k = `${c.state}|${indexKey(c.jurisdictionType, name)}`;
-      assert.ok(!keys.has(k) || keys.get(k) === c.officialCode + c.id, `engine key collision: ${k}`);
-      keys.set(k, c.officialCode + c.id);
+      shared.set(k, [...(shared.get(k) ?? []), c]);
     }
+  }
+  for (const [k, list] of shared) {
+    if (new Set(list.map((c) => c.officialCode)).size === 1) continue;
+    const perCounty = new Map<string, Set<string>>();
+    for (const c of list) {
+      assert.ok(c.countyName, `engine key ${k} has several codes and ${c.officialCode} has no county`);
+      perCounty.set(c.countyName!, (perCounty.get(c.countyName!) ?? new Set()).add(c.officialCode));
+    }
+    assert.ok([...perCounty.values()].every((s) => s.size === 1), `engine key ${k}: one county, several codes`);
   }
   const okc = all.filter((c) => c.state === "OK" && c.jurisdictionType === "city" && codeKey(c.jurisdictionName) === "oklahoma");
   assert.deepEqual(okc.map((c) => c.officialCode), ["5521"], "Oklahoma City must still resolve to 5521 only");

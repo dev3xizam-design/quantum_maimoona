@@ -20,7 +20,7 @@ const FROM_DIRECTORY = `${DIRECTORY_NOTE}%`;
 function Fields({ r }: { r?: typeof jurisdictionCodes.$inferSelect }) {
   return (
     <>
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-5 gap-3">
         <div>
           <label className="field">State</label>
           <input name="state" type="text" defaultValue={r?.state ?? ""} required maxLength={2} />
@@ -50,6 +50,10 @@ function Fields({ r }: { r?: typeof jurisdictionCodes.$inferSelect }) {
         <div>
           <label className="field">Rate (decimal)</label>
           <input name="rate" type="text" defaultValue={r?.rate ? num(r.rate) : ""} />
+        </div>
+        <div>
+          <label className="field">County (picks between a city&apos;s per-county codes)</label>
+          <input name="countyName" type="text" defaultValue={r?.countyName ?? ""} />
         </div>
         <div>
           <label className="field">Effective from</label>
@@ -186,6 +190,7 @@ export default async function JurisdictionsPage({
               <th>Type</th>
               <th>Code</th>
               <th>Paired</th>
+              <th>County</th>
               <th className="num">Rate</th>
               <th>Alias</th>
               <th>Notes</th>
@@ -200,6 +205,7 @@ export default async function JurisdictionsPage({
                 <td>{r.jurisdictionType}</td>
                 <td className="font-mono text-[12px]">{r.officialCode}</td>
                 <td className="font-mono text-[12px]">{r.pairedCode ?? ""}</td>
+                <td className="text-[11px]">{r.countyName ?? ""}</td>
                 <td className="num">{r.rate ? num(r.rate) : ""}</td>
                 <td>{r.avalaraAlias ?? ""}</td>
                 <td className="max-w-[260px] text-[11px] text-[var(--muted)]">{r.notes ?? ""}</td>

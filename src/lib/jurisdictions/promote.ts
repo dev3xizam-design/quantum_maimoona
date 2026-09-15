@@ -22,6 +22,8 @@ export type Candidate = {
   officialCode: string;
   /** Whose code it is. A state's own return code outranks a FIPS code for the same place. */
   codeSystem?: string;
+  /** County the code covers; lets a city with one code per county portion be added whole. */
+  countyName?: string | null;
 };
 
 const isFips = (c: Candidate) => /FIPS/i.test(c.codeSystem ?? "");
@@ -42,11 +44,9 @@ const nameKey = (type: string, name: string | null) => indexKey(type, name);
 
 export function planPromotion<T extends Candidate>(allCandidates: T[], existing: ExistingCode[]): PromotionPlan<T> {
   const takenNames = new Set<string>();
-  const takenCodes = new Set<string>();
   for (const c of existing) {
     takenNames.add(nameKey(c.jurisdictionType, c.jurisdictionName));
     if (c.avalaraAlias) takenNames.add(nameKey(c.jurisdictionType, c.avalaraAlias));
-    takenCodes.add(`${c.jurisdictionType}|${c.officialCode}`);
   }
 
   const coded = allCandidates.filter((c) => c.officialCode.trim() !== "");
@@ -56,12 +56,27 @@ export function planPromotion<T extends Candidate>(allCandidates: T[], existing:
   const superseded = coded.filter((c) => isFips(c) && hasStateCode.has(nameKey(c.jurisdictionType, c.jurisdictionName)));
   const candidates = coded.filter((c) => !superseded.includes(c));
 
-  const wanted = new Map<string, Set<string>>();
+  /**
+   * Several codes under one name are fine when each is tied to a different
+   * county (Tulsa, Kingsport, De Soto): the engine picks by destination county.
+   * Several codes with no county to tell them apart need a person.
+   */
+  const group = new Map<string, T[]>();
   for (const c of candidates) {
     const k = nameKey(c.jurisdictionType, c.jurisdictionName);
-    // Count distinct codes, so the same code listed twice is not "ambiguous".
-    wanted.set(k, (wanted.get(k) ?? new Set()).add(c.officialCode));
+    group.set(k, [...(group.get(k) ?? []), c]);
   }
+  const resolvable = (list: T[]) => {
+    const codes = new Set(list.map((c) => c.officialCode));
+    if (codes.size <= 1) return true;
+    const byCounty = new Map<string, Set<string>>();
+    for (const c of list) {
+      const county = (c.countyName ?? "").trim().toLowerCase();
+      if (!county) return false;
+      byCounty.set(county, (byCounty.get(county) ?? new Set()).add(c.officialCode));
+    }
+    return [...byCounty.values()].every((s) => s.size === 1);
+  };
 
   const plan: PromotionPlan<T> = {
     add: [],
@@ -73,11 +88,13 @@ export function planPromotion<T extends Candidate>(allCandidates: T[], existing:
   const added = new Set<string>();
   for (const c of candidates) {
     const nk = nameKey(c.jurisdictionType, c.jurisdictionName);
-    const ck = `${c.jurisdictionType}|${c.officialCode}`;
-    if (takenCodes.has(ck) || takenNames.has(nk)) plan.alreadyPresent.push(c);
-    else if ((wanted.get(nk)?.size ?? 0) > 1) plan.ambiguous.push(c);
-    else if (!added.has(ck)) {
-      added.add(ck);
+    // Same name AND same code AND same county is a true duplicate; NYC's five
+    // boroughs share 8081 under five names and all belong in.
+    const dup = `${nk}|${c.officialCode}|${(c.countyName ?? "").toLowerCase()}`;
+    if (takenNames.has(nk)) plan.alreadyPresent.push(c);
+    else if (!resolvable(group.get(nk)!)) plan.ambiguous.push(c);
+    else if (!added.has(dup)) {
+      added.add(dup);
       plan.add.push(c);
     }
   }

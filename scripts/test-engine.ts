@@ -907,6 +907,118 @@ test("Texas returns list taxing authorities; other states keep the destination-c
   assert.ok(!lines.some((l) => l.name === "HARRIS"), "Harris County levies nothing and is not a return line");
   assert.equal(round2(lines.reduce((a, l) => a + l.tax, 0)), tx.localTaxCollected);
 
-  const other = computeSales(rows.map((r) => ({ ...r, state: "XX" })), { config: { ...txConfig, state: "XX", allocation: "county" }, period: "2026-08", codes });
-  assert.deepEqual(allocationLines(other).map((l) => l.name), ["HARRIS"]);
+  // Nevada's return is by destination county, every county a line.
+  const nv = computeSales(rows.map((r) => ({ ...r, state: "NV" })), { config: { ...txConfig, state: "NV", allocation: "county" }, period: "2026-08", codes });
+  assert.deepEqual(allocationLines(nv).map((l) => l.name), ["HARRIS"]);
+});
+
+/* ------------------------------------------------------------------ */
+/* Every state: return models, county-aware codes, spelling            */
+/* ------------------------------------------------------------------ */
+
+test("state charts and Avalara spell places differently; the key is the same", async () => {
+  const { codeKey, specialKey } = await import("../src/lib/engine/sales");
+  const same = (a: string, b: string, key = codeKey) => assert.equal(key(a), key(b), `${a} vs ${b}`);
+  same("ITHACA", "Ithaca (city)");
+  same("SAINT JOHNS", "St. Johns County");
+  same("MORTON CO", "Morton County");
+  same("LAKE ST. LOUIS", "LAKE ST LOUIS / ST CHARLES COUNTY / SOUTHERN LAKES CID");
+  same("ASOTIN", "Asotin County Unincorp. Areas");
+  same("BERNALILLO", "Bernalillo County (remainder of county / unincorporated)");
+  same("DULUTH", "Duluth Sales");
+  same("MILWAUKEE", "City of Milwaukee");
+  same("DE SOTO", "De Soto (Johnson County)");
+  assert.notEqual(codeKey("Duluth Sales"), codeKey("Duluth Use"), "a use-tax code is a different code");
+  same("WAKE CO TR", "Wake County Transit Tax", specialKey);
+  same("MECKLENBURG CO PUBLIC TRANSPORTATION TAX", "Mecklenburg County Transit Tax", specialKey);
+  same("CENTRAL OHIO TRANSIT AUTHORITY TAX", "Central Ohio Transit Authority (COTA)", specialKey);
+  same("DUTCHESS CO TRANSIT DISTRICT", "Dutchess County", specialKey);
+});
+
+const code = (jurisdictionType: string, jurisdictionName: string, officialCode: string, countyName: string | null = null, fromDirectory = true) => ({
+  jurisdictionName, jurisdictionType, officialCode, pairedCode: null, pairedName: null,
+  rate: null, rateIncludesState: false, avalaraAlias: null, fromDirectory, countyName,
+});
+
+test("a city with one code per county gets the code for the county the sale went to", () => {
+  const sale = (doc: string, county: string, city: string, cityTax: number) => [
+    line(doc, "1", "State", { amount: 100, taxable: 100, tax: 4.5 }, { state: "OK", destCounty: county, destCity: city, jurisdictionDescription: "OKLAHOMA" }),
+    line(doc, "1", "City", { amount: 100, taxable: 100, tax: cityTax }, { state: "OK", destCounty: county, destCity: city, jurisdictionDescription: city }),
+  ];
+  const r = computeSales([...sale("A", "TULSA", "TULSA", 3.65), ...sale("B", "WAGONER", "TULSA", 3.65)], {
+    config: { ...txConfig, state: "OK" },
+    period: "2026-07",
+    codes: [code("city", "TULSA", "7209", "Tulsa County"), code("city", "TULSA", "7309", "Wagoner County")],
+  });
+  const tulsa = r.byLocation!.filter((l) => l.name === "TULSA" && l.type !== "County");
+  assert.deepEqual(tulsa.map((l) => `${l.county}=${l.code}`).sort(), ["TULSA=7209", "WAGONER=7309"]);
+  assert.ok(!r.warnings.some((w) => /no official filing code/.test(w)), r.warnings.join(" | "));
+});
+
+test("location states file a city's sales under the city and the rest under the county", async () => {
+  const { allocationLines } = await import("../src/lib/engine/sales");
+  const kansas = (doc: string, city: string, cityTaxed: boolean, amount: number) => [
+    line(doc, "1", "State", { amount, taxable: amount, tax: amount * 0.065 }, { state: "KS", destCounty: "JOHNSON", destCity: city, jurisdictionDescription: "KANSAS" }),
+    line(doc, "1", "County", { amount, taxable: amount, tax: amount * 0.01475 }, { state: "KS", destCounty: "JOHNSON", destCity: city, jurisdictionDescription: "JOHNSON" }),
+    ...(cityTaxed ? [line(doc, "1", "City", { amount, taxable: amount, tax: amount * 0.01 }, { state: "KS", destCounty: "JOHNSON", destCity: city, jurisdictionDescription: city })] : []),
+  ];
+  const r = computeSales([...kansas("A", "DE SOTO", true, 100), ...kansas("B", "STILWELL", false, 40)], {
+    config: { ...txConfig, state: "KS", allocation: "county" },
+    period: "2026-07",
+    codes: [
+      code("city", "De Soto (Leavenworth County)", "DESLV", "Leavenworth County"),
+      code("city", "De Soto (Johnson County)", "DESJO", "Johnson County"),
+      code("county", "Johnson County", "JOHCO", "Johnson County"),
+    ],
+  });
+  const lines = allocationLines(r).map((l) => `${l.name}=${l.code}:${l.taxable}`);
+  // Stilwell levies no city tax: its sale belongs to Johnson County's code.
+  assert.deepEqual(lines, ["DE SOTO=DESJO:100", "JOHNSON=JOHCO:40"]);
+});
+
+test("no local tax collected means no allocation lines and no code warnings", async () => {
+  const { allocationLines } = await import("../src/lib/engine/sales");
+  const rows = [line("A", "1", "State", { amount: 100, taxable: 100, tax: 8 }, { state: "AL", destCounty: "MADISON", destCity: "HUNTSVILLE", jurisdictionDescription: "ALABAMA" })];
+  const r = computeSales(rows, { config: { ...txConfig, state: "AL", allocation: "county" }, period: "2026-07", codes: [] });
+  assert.deepEqual(allocationLines(r), []);
+  assert.ok(!r.warnings.some((w) => /no official filing code/.test(w)));
+});
+
+test("NY: boroughs file under 8081, a county's transit district under the county, the MCTD needs no code", async () => {
+  const { allocationLines } = await import("../src/lib/engine/sales");
+  const ny = (doc: string, county: string, jur: string, type: string, tax: number) =>
+    line(doc, "1", type, { amount: 100, taxable: 100, tax }, { state: "NY", destCounty: county, destCity: null, jurisdictionDescription: jur });
+  const rows = [
+    ny("A", "KINGS", "NEW YORK", "State", 4), ny("A", "KINGS", "KINGS", "County", 4.5),
+    ny("A", "KINGS", "METROPOLITAN COMMUTER TRANSPORTATION DISTRICT", "Special Tax Jurisdiction", 0.375),
+    ny("B", "DUTCHESS", "NEW YORK", "State", 4), ny("B", "DUTCHESS", "DUTCHESS", "County", 3.375),
+    ny("B", "DUTCHESS", "DUTCHESS CO TRANSIT DISTRICT", "Special Tax Jurisdiction", 0.375),
+  ];
+  const r = computeSales(rows, {
+    config: { ...txConfig, state: "NY", allocation: "county" },
+    period: "2026-07",
+    codes: [code("county", "Kings County (Brooklyn)", "8081", "Kings"), code("county", "Dutchess County", "1311", "Dutchess")],
+  });
+  const byName = Object.fromEntries(allocationLines(r).map((l) => [l.name, l.code]));
+  assert.equal(byName.KINGS, "8081");
+  assert.equal(byName["DUTCHESS CO TRANSIT DISTRICT"], "1311");
+  assert.equal(byName["METROPOLITAN COMMUTER TRANSPORTATION DISTRICT"], "in local codes");
+  assert.ok(!r.warnings.some((w) => /no official filing code/.test(w)), r.warnings.join(" | "));
+});
+
+test("promotion: per-county codes and NYC's shared 8081 go in; codes with nothing to tell them apart do not", async () => {
+  const { planPromotion } = await import("../src/lib/jurisdictions/promote");
+  const plan = planPromotion(
+    [
+      { jurisdictionType: "city", jurisdictionName: "TULSA", officialCode: "7209", countyName: "Tulsa County" },
+      { jurisdictionType: "city", jurisdictionName: "TULSA", officialCode: "7309", countyName: "Wagoner County" },
+      { jurisdictionType: "county", jurisdictionName: "Bronx County (Bronx)", officialCode: "8081", countyName: "Bronx" },
+      { jurisdictionType: "county", jurisdictionName: "Kings County (Brooklyn)", officialCode: "8081", countyName: "Kings" },
+      { jurisdictionType: "city", jurisdictionName: "Norman", officialCode: "1409", countyName: null },
+      { jurisdictionType: "city", jurisdictionName: "Norman", officialCode: "1410", countyName: null },
+    ],
+    [],
+  );
+  assert.deepEqual(plan.add.map((c) => c.officialCode), ["7209", "7309", "8081", "8081"]);
+  assert.deepEqual(plan.ambiguous.map((c) => c.officialCode), ["1409", "1410"]);
 });

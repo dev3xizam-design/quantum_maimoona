@@ -15,10 +15,19 @@ export type NewCode = typeof jurisdictionCodes.$inferInsert;
 export const today = () => new Date().toISOString().slice(0, 10);
 
 
+/** Where Avalara's name shares nothing with the state's: Hawaii's districts are named for the islands' counties. */
+const AVALARA_ALIASES: Record<string, Record<string, string>> = {
+  HI: { "1": "Honolulu", "2": "Maui", "3": "Hawaii", "4": "Kauai" },
+};
+
 export function toCode(r: DirRow, includeRate: boolean): NewCode {
   const rate = includeRate ? engineRate(r) : null;
+  // A directory row's effective date is when its current RATE began, not when
+  // the code was created - Washington's July rate file dates every location code
+  // 2026-07-01. A code added without a rate is valid from the start of the data;
+  // a district that is genuinely new has no sales before it existed to mis-match.
   const effectiveFrom =
-    r.effectiveFrom && r.effectiveFrom > DEFAULT_EFFECTIVE_FROM ? r.effectiveFrom : DEFAULT_EFFECTIVE_FROM;
+    includeRate && r.effectiveFrom && r.effectiveFrom > DEFAULT_EFFECTIVE_FROM ? r.effectiveFrom : DEFAULT_EFFECTIVE_FROM;
   const notes = [
     `${DIRECTORY_NOTE}${r.codeSystem})`,
     r.countyName && engineType(r.jurisdictionType) !== "county" ? `county: ${r.countyName}` : null,
@@ -32,6 +41,8 @@ export function toCode(r: DirRow, includeRate: boolean): NewCode {
     jurisdictionName: r.jurisdictionName,
     jurisdictionType: engineType(r.jurisdictionType),
     officialCode: r.officialCode,
+    countyName: r.countyName,
+    avalaraAlias: AVALARA_ALIASES[r.state]?.[r.officialCode] ?? null,
     pairedCode: PAIRED_ON_RETURN.has(r.state) ? r.pairedCode : null,
     pairedName: PAIRED_ON_RETURN.has(r.state) ? r.pairedName : null,
     rate,
@@ -109,7 +120,7 @@ export async function promoteStates(actor: string, states: string[] | null, incl
       .filter((r) => r.jurisdictionType !== "state" && (r.officialCode === "" || isPromotable(r)))
       .map((r) => {
         const value = toCode(r, includeRates);
-        return { ...value, jurisdictionType: value.jurisdictionType, codeSystem: r.codeSystem, value };
+        return { ...value, jurisdictionType: value.jurisdictionType, codeSystem: r.codeSystem, countyName: r.countyName, value };
       });
     const plan = planPromotion(candidates, group.existing);
     toAdd.push(...plan.add.map((c) => c.value));
