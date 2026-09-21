@@ -184,11 +184,11 @@ a { color: inherit; text-decoration: none; }
 
 .stat {
   background: var(--panel); border: 1px solid var(--line);
-  border-radius: var(--radius); box-shadow: var(--shadow-sm); padding: 16px 18px;
+  border-radius: var(--radius); box-shadow: var(--shadow-sm); padding: 13px 14px;
 }
-.stat-label { font-size: 11px; font-weight: 650; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
-.stat-value { margin-top: 6px; font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
-.stat-sub { margin-top: 3px; font-size: 11.5px; color: var(--muted); }
+.stat-label { font-size: 10px; font-weight: 650; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+.stat-value { margin-top: 3px; font-size: 21px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+.stat-sub { margin-top: 2px; font-size: 11px; color: var(--muted); }
 
 /* Big friendly shortcut tiles. */
 .tilegrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
@@ -200,7 +200,7 @@ a { color: inherit; text-decoration: none; }
 }
 .tile:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
 .tile-icon {
-  width: 40px; height: 40px; border-radius: 13px;
+  width: 32px; height: 32px; border-radius: 10px;
   display: flex; align-items: center; justify-content: center;
 }
 .tile-title { font-size: 14px; font-weight: 650; }
@@ -406,4 +406,117 @@ details > summary { list-style: none; }
   .hero-value { font-size: 38px; }
   .stat { padding: 14px; }
   .stat-value { font-size: 21px; }
+}
+
+/* ---------------------------------------------------------------- */
+/* Motion                                                            */
+/* ---------------------------------------------------------------- */
+
+@keyframes q-fade-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes q-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes q-slide-left {
+  from { opacity: 0; transform: translateX(16px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes q-pop {
+  0%   { transform: scale(0.85); opacity: 0; }
+  60%  { transform: scale(1.04); opacity: 1; }
+  100% { transform: scale(1); }
+}
+@keyframes q-shimmer {
+  from { background-position: -420px 0; }
+  to   { background-position: 420px 0; }
+}
+@keyframes q-tabline {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+
+/* `--d` staggers a group without needing a class per index. */
+.anim-up   { animation: q-fade-up 0.42s cubic-bezier(0.22, 1, 0.36, 1) both; animation-delay: var(--d, 0ms); }
+.anim-in   { animation: q-fade-in 0.35s ease both; animation-delay: var(--d, 0ms); }
+.anim-side { animation: q-slide-left 0.38s cubic-bezier(0.22, 1, 0.36, 1) both; animation-delay: var(--d, 0ms); }
+.anim-pop  { animation: q-pop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) both; animation-delay: var(--d, 0ms); }
+
+/* Every page's content arrives rather than appearing. */
+main > * { animation: q-fade-up 0.34s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+.panel { transition: box-shadow 0.22s ease, border-color 0.22s ease, transform 0.22s ease; }
+.stat { transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.2s ease; }
+.stat:hover { transform: translateY(-3px); box-shadow: var(--shadow-md); }
+.stat .tile-icon { transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.stat:hover .tile-icon { transform: scale(1.1) rotate(-4deg); }
+
+/* The active tab's underline grows out from the middle. */
+.tab { position: relative; }
+.tab[data-active="true"]::after {
+  content: ""; position: absolute; left: 10%; right: 10%; bottom: -1px; height: 2px;
+  background: var(--q-600); border-radius: 2px;
+  animation: q-tabline 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.tab[data-active="true"] { border-bottom-color: transparent; }
+.tab-count { transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease; }
+.tab:hover .tab-count { transform: scale(1.08); }
+
+table.qtable tbody tr { transition: background 0.16s ease; }
+table.qtable tbody td { transition: background 0.16s ease; }
+
+.navlink { transition: background 0.16s ease, color 0.16s ease, transform 0.16s ease; }
+.navlink:hover { transform: translateX(2px); }
+.navlink[data-active="true"] { animation: q-fade-in 0.25s ease both; }
+
+.btn { transition: background 0.14s, border-color 0.14s, transform 0.12s, box-shadow 0.18s; }
+.btn-primary:hover { transform: translateY(-1px); box-shadow: 0 8px 20px rgba(72, 48, 240, 0.34); }
+.btn-primary:active { transform: translateY(0); }
+
+.badge { transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.tile { transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.2s ease; }
+
+.callout, .help { animation: q-fade-up 0.3s ease both; }
+.issue { animation: q-fade-in 0.3s ease both; }
+
+/* A loading bar that reads as progress rather than a frozen screen. */
+.skeleton {
+  background: linear-gradient(90deg, #eef0f7 0%, #f7f8fc 45%, #eef0f7 90%);
+  background-size: 840px 100%;
+  animation: q-shimmer 1.3s linear infinite;
+  border-radius: 8px;
+}
+
+/* ---- phone ---------------------------------------------------- */
+@media (max-width: 1023px) {
+  .tabitem { transition: color 0.18s ease, background 0.18s ease, transform 0.18s ease; }
+  .tabitem svg { transition: transform 0.26s cubic-bezier(0.34, 1.56, 0.64, 1); }
+  .tabitem[data-active="true"] svg { transform: translateY(-2px) scale(1.14); }
+  .tabitem:active { transform: scale(0.94); }
+
+  .tabbar { animation: q-fade-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) both; }
+  .mobilebar { animation: q-fade-in 0.3s ease both; }
+
+  /* Cards arrive one after another on a phone, where there is time to see it. */
+  .stat { animation: q-fade-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) both; }
+  .stat:nth-child(1) { animation-delay: 0.02s; }
+  .stat:nth-child(2) { animation-delay: 0.08s; }
+  .stat:nth-child(3) { animation-delay: 0.14s; }
+  .stat:nth-child(4) { animation-delay: 0.2s; }
+
+  .panel { animation: q-fade-up 0.42s cubic-bezier(0.22, 1, 0.36, 1) both; }
+  .btn:active { transform: scale(0.97); }
+  table.qtable tbody tr:active td { background: var(--q-50); }
+}
+
+/* Anyone who has asked for less motion gets none of it. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

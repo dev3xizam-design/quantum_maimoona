@@ -15,12 +15,14 @@ function Card({
   sub,
   tone,
   icon,
+  delay = 0,
 }: {
   label: string;
   value: string;
   sub?: string;
   tone?: "green" | "violet" | "blue" | "amber" | "warn";
   icon: React.ReactNode;
+  delay?: number;
 }) {
   const skin = {
     green: { bg: "var(--green-soft)", fg: "var(--green)" },
@@ -31,11 +33,11 @@ function Card({
   }[tone ?? "violet"];
 
   return (
-    <div className="stat">
+    <div className="stat anim-up" style={{ "--d": `${delay}ms` } as React.CSSProperties}>
       <span className="tile-icon" style={{ background: skin.bg, color: skin.fg }}>
         {icon}
       </span>
-      <div className="stat-label mt-3">{label}</div>
+      <div className="stat-label mt-2.5">{label}</div>
       <div className="stat-value" style={tone === "warn" ? { color: "var(--danger)" } : undefined}>
         {value}
       </div>
@@ -123,42 +125,50 @@ export default async function MonthLayout({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Card
-          label="Total tax due"
-          value={fmtMoney(num(snapshot.totalTax))}
-          sub={`Gross sales: ${fmtMoney(num(snapshot.gross))}`}
-          tone="green"
-          icon={iconCoins}
-        />
-        <Card
-          label="Under-collected"
-          value={fmtMoney(Math.max(0, delta))}
-          tone={delta >= 0.01 ? "warn" : "violet"}
-          sub={delta >= 0.01 ? "Needs attention" : "Nothing outstanding"}
-          icon={iconAlert}
-        />
-        <Card
-          label="Action items"
-          value={snapshot.warnings.toLocaleString()}
-          tone="blue"
-          sub="Pending across states"
-          icon={iconList}
-        />
-        <Card
-          label="PACT lines"
-          value={snapshot.pactShipments.toLocaleString()}
-          tone="amber"
-          sub="Shipments to report"
-          icon={iconTruck}
-        />
-      </div>
+      {/* Two columns from the top, so the state panel sits level with the
+          cards rather than starting below them. */}
+      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_380px] 2xl:grid-cols-[minmax(0,1fr)_420px]">
+        <div className="min-w-0 space-y-4">
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <Card
+              label="Total tax due"
+              value={fmtMoney(num(snapshot.totalTax))}
+              sub={`Gross sales: ${fmtMoney(num(snapshot.gross))}`}
+              tone="green"
+              icon={iconCoins}
+              delay={0}
+            />
+            <Card
+              label="Under-collected"
+              value={fmtMoney(Math.max(0, delta))}
+              tone={delta >= 0.01 ? "warn" : "violet"}
+              sub={delta >= 0.01 ? "Needs attention" : "Nothing outstanding"}
+              icon={iconAlert}
+              delay={60}
+            />
+            <Card
+              label="Action items"
+              value={snapshot.warnings.toLocaleString()}
+              tone="blue"
+              sub="Pending across states"
+              icon={iconList}
+              delay={120}
+            />
+            <Card
+              label="PACT lines"
+              value={snapshot.pactShipments.toLocaleString()}
+              tone="amber"
+              sub="Shipments to report"
+              icon={iconTruck}
+              delay={180}
+            />
+          </div>
 
-      <div className="mt-4 grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_400px] 2xl:grid-cols-[minmax(0,1fr)_460px]">
-        <MonthBreakdown month={month} states={states} />
-        {/* The panel scrolls on its own so picking a state never drags the
-            whole page down with it. */}
-        <div className="xl:sticky xl:top-4 xl:max-h-[calc(100vh-2rem)] xl:overflow-y-auto xl:pr-1">
+          <MonthBreakdown month={month} states={states} />
+        </div>
+
+        {/* Scrolls on its own so picking a state never drags the page down. */}
+        <div className="anim-side min-w-0 xl:sticky xl:top-3 xl:max-h-[calc(100vh-1.5rem)] xl:overflow-y-auto xl:pr-1">
           {children}
         </div>
       </div>
