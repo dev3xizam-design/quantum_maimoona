@@ -17,6 +17,15 @@ export const IconCalendar = () => (
   </svg>
 );
 
+export const IconDashboard = () => (
+  <svg {...base}>
+    <rect x="3" y="3" width="7.5" height="9" rx="1.6" />
+    <rect x="13.5" y="3" width="7.5" height="5.5" rx="1.6" />
+    <rect x="13.5" y="12" width="7.5" height="9" rx="1.6" />
+    <rect x="3" y="15.5" width="7.5" height="5.5" rx="1.6" />
+  </svg>
+);
+
 export const IconMonths = () => (
   <svg {...base}>
     <rect x="3" y="4" width="18" height="17" rx="2" />

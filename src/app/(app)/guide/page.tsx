@@ -103,7 +103,7 @@ export default function GuidePage() {
           <li>
             <strong>File each return</strong> from its own tab, then come back and press{" "}
             <em>Mark filed</em> on the return with the confirmation number. That is what keeps the{" "}
-            <Link className="text-[var(--accent)]" href="/">Calendar</Link> honest.
+            <Link className="text-[var(--accent)]" href="/calendar">Calendar</Link> honest.
           </li>
         </ol>
       </Card>

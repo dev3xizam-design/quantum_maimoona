@@ -55,7 +55,7 @@ export default async function ReturnPage({
   if (error || !result) {
     return (
       <div className="space-y-4">
-        <Link href="/" className="text-[12px] text-[var(--accent)]">&larr; Calendar</Link>
+        <Link href="/calendar" className="text-[12px] text-[var(--accent)]">&larr; Calendar</Link>
         <div className="callout callout-warn">
           <strong>Cannot compute {state} {taxType} for {period}.</strong>
           <div className="mt-1">{error}</div>
@@ -70,7 +70,7 @@ export default async function ReturnPage({
     <div className="space-y-5">
       <div className="flex flex-wrap items-start gap-3">
         <div>
-          <Link href="/" className="text-[12px] text-[var(--accent)]">&larr; Calendar</Link>
+          <Link href="/calendar" className="text-[12px] text-[var(--accent)]">&larr; Calendar</Link>
           <h1 className="mt-1 text-[18px] font-semibold tracking-tight">
             {state} · {taxType === "pact" ? "PACT Act" : taxType === "excise" ? "Vapor excise" : "Sales / use tax"} · {periodLabel(period)}
           </h1>

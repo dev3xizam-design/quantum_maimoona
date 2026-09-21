@@ -10,6 +10,7 @@ import type { SidebarStats } from "@/lib/sidebar-stats";
 import {
   IconAudit,
   IconCalendar,
+  IconDashboard,
   IconConfig,
   IconGuide,
   IconMonths,
@@ -27,8 +28,9 @@ const GROUPS: {
   {
     label: "Filing",
     links: [
+      { href: "/", label: "Dashboard", icon: IconDashboard },
       { href: "/months", label: "Months", icon: IconMonths, badge: "months" },
-      { href: "/", label: "Calendar", icon: IconCalendar },
+      { href: "/calendar", label: "Calendar", icon: IconCalendar },
       { href: "/returns", label: "Returns", icon: IconReturns, badge: "overdue" },
     ],
   },
@@ -50,8 +52,8 @@ const GROUPS: {
 ];
 
 const PRIMARY = [
+  { href: "/", label: "Home", icon: IconDashboard },
   { href: "/months", label: "Months", icon: IconMonths },
-  { href: "/", label: "Calendar", icon: IconCalendar },
   { href: "/products", label: "Products", icon: IconProducts },
   { href: "/upload", label: "Upload", icon: IconUpload },
   { href: "/guide", label: "Guide", icon: IconGuide },
