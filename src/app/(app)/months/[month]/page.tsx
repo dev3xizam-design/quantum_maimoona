@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getMonthSnapshot, statesFromSnapshot } from "@/lib/months";
 import { fmtMoney, num } from "@/lib/money";
 import { stateName } from "@/lib/states";
+import { periodLabel } from "@/lib/periods";
 
 export const dynamic = "force-dynamic";
 
@@ -33,38 +34,39 @@ export default async function MonthOverviewPage({
   const failures = states.filter((s) => !s.reconciles);
   const underCollected = states.filter((s) => s.delta >= 0.01);
 
+  const totalTax = num(snapshot.totalTax);
+
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-        <Tile label="States with activity" value={String(snapshot.statesWithActivity)} />
-        <Tile label="Gross sales" value={fmtMoney(num(snapshot.gross))} sub={`${fmtMoney(num(snapshot.taxable))} taxable`} />
-        <Tile label="Sales tax" value={fmtMoney(num(snapshot.salesTax))} />
-        <Tile label="Vapor excise" value={fmtMoney(num(snapshot.exciseTax))} />
-        <Tile label="Total tax due" value={fmtMoney(num(snapshot.totalTax))} tone="ok" sub={`${snapshot.pactShipments.toLocaleString()} PACT lines`} />
-      </div>
+      <div className="panel p-6">
+        <div className="hero">
+          <div className="hero-label">{periodLabel(month)} · total tax due</div>
+          <div className="hero-value">{fmtMoney(totalTax)}</div>
+          <div className="hero-sub">
+            {snapshot.statesWithActivity} states · {fmtMoney(num(snapshot.gross))} gross ·{" "}
+            {snapshot.pactShipments.toLocaleString()} PACT lines
+          </div>
+        </div>
 
-      {failures.length > 0 && (
-        <div className="callout callout-warn">
-          <strong>Reconciliation failed in {failures.map((s) => s.state).join(", ")}.</strong>{" "}
-          Taxable + Exempt does not equal Gross there — do not file those states until the upload is
-          corrected.
+        <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-4">
+          <Tile label="Sales tax" value={fmtMoney(num(snapshot.salesTax))} />
+          <Tile label="Vapor excise" value={fmtMoney(num(snapshot.exciseTax))} />
+          <Tile label="Taxable sales" value={fmtMoney(num(snapshot.taxable))} />
+          <Tile
+            label="Under-collected"
+            value={fmtMoney(Math.max(0, num(snapshot.delta)))}
+            tone={num(snapshot.delta) >= 0.01 ? "warn" : "ok"}
+            sub={num(snapshot.delta) >= 0.01 ? "comes out of margin" : "nothing outstanding"}
+          />
         </div>
-      )}
-      {underCollected.length > 0 && (
-        <div className="callout callout-warn">
-          <strong>
-            {underCollected.length} state{underCollected.length === 1 ? "" : "s"} under-collected —{" "}
-            {fmtMoney(underCollected.reduce((s, x) => s + x.delta, 0))} total.
-          </strong>{" "}
-          That difference comes out of margin. Biggest:{" "}
-          {[...underCollected]
-            .sort((a, b) => b.delta - a.delta)
-            .slice(0, 4)
-            .map((s) => `${s.state} ${fmtMoney(s.delta)}`)
-            .join(", ")}
-          .
-        </div>
-      )}
+
+        {failures.length > 0 && (
+          <div className="callout callout-warn mt-4">
+            <strong>{failures.map((s2) => s2.state).join(", ")} do not reconcile.</strong> Do not
+            file those states until the upload is corrected.
+          </div>
+        )}
+      </div>
 
       <div className="panel overflow-hidden">
         <div className="panel-head">
@@ -130,6 +132,22 @@ export default async function MonthOverviewPage({
           <div className="empty">No state had transactions in this month.</div>
         )}
       </div>
+
+      {underCollected.length > 0 && (
+        <div className="help">
+          <strong>
+            {underCollected.length} state{underCollected.length === 1 ? "" : "s"} under-collected,{" "}
+            {fmtMoney(underCollected.reduce((s, x) => s + x.delta, 0))} in total.
+          </strong>{" "}
+          Biggest:{" "}
+          {[...underCollected]
+            .sort((a, b) => b.delta - a.delta)
+            .slice(0, 4)
+            .map((s) => `${s.state} ${fmtMoney(s.delta)}`)
+            .join(", ")}
+          . Over-collection is not listed — it is not a margin hit and needs no action.
+        </div>
+      )}
     </div>
   );
 }

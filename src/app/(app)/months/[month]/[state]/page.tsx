@@ -11,6 +11,8 @@ import { allocationLabel, allocationLines } from "@/lib/engine/sales";
 import { salesFormFor } from "@/lib/excel/forms/sales";
 import type { ExciseResult, PactResult, SalesResult } from "@/lib/engine/types";
 import { stateName } from "@/lib/states";
+import { IssueList } from "@/components/IssueList";
+import { groupIssues } from "@/lib/issues";
 import { FiledForm } from "../../../returns/[state]/[taxType]/[period]/FiledForm";
 
 export const dynamic = "force-dynamic";
@@ -99,23 +101,65 @@ export default async function StateMonthPage({
     ...(pa?.warnings ?? []),
   ];
 
+  const totalDue = (s?.taxComputed ?? 0) + (e?.taxComputed ?? 0);
+  const { blocking } = groupIssues(allWarnings);
+
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <h2 className="text-[16px] font-semibold tracking-tight">{stateName(state)}</h2>
-        {account?.accountNumber && (
-          <span className="text-[11.5px] text-[var(--muted)]">Acct {account.accountNumber}</span>
-        )}
-        {exciseAccount?.licenseNumber && (
-          <span className="text-[11.5px] text-[var(--muted)]">
-            License {exciseAccount.licenseNumber}
-          </span>
+      <div className="panel p-6">
+        <div className="hero">
+          <div className="hero-label">{stateName(state)} · total tax due</div>
+          <div className="hero-value">{fmtMoney(totalDue)}</div>
+          <div className="hero-sub">
+            {s && `sales ${fmtMoney(s.taxComputed)}`}
+            {e && ` · excise ${fmtMoney(e.taxComputed)}`}
+            {pa && pa.shipmentCount > 0 && ` · ${pa.shipmentCount} PACT lines`}
+          </div>
+        </div>
+
+        <div className="mt-5 grid gap-3 md:grid-cols-3">
+          {s && (
+            <div className="tile">
+              <span className="tile-icon" style={{ background: "var(--q-100)", color: "var(--q-700)" }}>
+                {iconDoc}
+              </span>
+              <div>
+                <div className="tile-title">{fmtMoney(s.taxComputed)}</div>
+                <div className="tile-sub">Sales tax · due {s.dueDate}</div>
+              </div>
+            </div>
+          )}
+          {e && (
+            <div className="tile">
+              <span className="tile-icon" style={{ background: "var(--violet-soft)", color: "var(--violet)" }}>
+                {iconDrop}
+              </span>
+              <div>
+                <div className="tile-title">{fmtMoney(e.taxComputed)}</div>
+                <div className="tile-sub">Vapor excise · due {e.dueDate}</div>
+              </div>
+            </div>
+          )}
+          {pa && pa.shipmentCount > 0 && (
+            <div className="tile">
+              <span className="tile-icon" style={{ background: "var(--blue-soft)", color: "var(--blue)" }}>
+                {iconTruck}
+              </span>
+              <div>
+                <div className="tile-title">{pa.shipmentCount.toLocaleString()}</div>
+                <div className="tile-sub">PACT lines · due {pa.dueDate}</div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {blocking.length > 0 && (
+          <div className="callout callout-warn mt-4">
+            <strong>{blocking[0].title}.</strong> Do not file this state until it is resolved —
+            details at the bottom of the page.
+          </div>
         )}
       </div>
-
-      {allWarnings.map((w, i) => (
-        <div key={i} className="callout callout-warn">{w}</div>
-      ))}
 
       <div className="grid gap-4 xl:grid-cols-[1fr_330px]">
         <div className="space-y-4">
@@ -308,6 +352,28 @@ export default async function StateMonthPage({
           </div>
         </aside>
       </div>
+
+      <IssueList warnings={allWarnings} />
     </div>
   );
 }
+
+const iconDoc = (
+  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M5 3h9l5 5v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" />
+    <path d="M14 3v5h5M8 13h8M8 17h5" />
+  </svg>
+);
+
+const iconDrop = (
+  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 3s6 6.4 6 10a6 6 0 0 1-12 0c0-3.6 6-10 6-10z" />
+  </svg>
+);
+
+const iconTruck = (
+  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 7h11v9H3zM14 10h4l3 3v3h-7z" />
+    <circle cx="7" cy="18" r="1.6" /><circle cx="17.5" cy="18" r="1.6" />
+  </svg>
+);

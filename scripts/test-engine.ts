@@ -1022,3 +1022,49 @@ test("promotion: per-county codes and NYC's shared 8081 go in; codes with nothin
   assert.deepEqual(plan.add.map((c) => c.officialCode), ["7209", "7309", "8081", "8081"]);
   assert.deepEqual(plan.ambiguous.map((c) => c.officialCode), ["1409", "1410"]);
 });
+
+/* ------------------------------------------------------------------ */
+/* Issue severity                                                      */
+/* ------------------------------------------------------------------ */
+
+test("only issues that change what you do reach the page", async () => {
+  const { groupIssues } = await import("../src/lib/issues");
+
+  const g = groupIssues([
+    "RECONCILIATION FAILED: Taxable + Exempt (100) != Gross (120). Difference 20.",
+    "UNDER-COLLECTION: the state's rate assesses 18.51 but Avalara collected 13.13.",
+    "OVER-COLLECTION: Avalara collected 73.27 vs computed 73.00 (+0.27).",
+    "WHOLESALE COST MISSING for 12 SKU(s) covering 18430.00 of retail this period.",
+    "3 SKU(s) sold this period are not yet in the product master.",
+  ]);
+
+  assert.equal(g.blocking.length, 1, "a failed reconciliation stops the filing");
+  assert.equal(g.blocking[0].title, "Figures do not reconcile");
+
+  assert.equal(g.notable.length, 2, "under-collection and a missing cost change the number");
+  assert.equal(g.quiet.length, 2, "over-collection and new SKUs are noise");
+  assert.equal(g.hiddenCount, 2);
+
+  // Over-collection must never be promoted - it is not a margin hit.
+  assert.equal(
+    g.visible.some((i) => /OVER-COLLECTION/.test(i.detail)),
+    false,
+  );
+});
+
+test("an unrecognised warning is shown, but never treated as blocking", async () => {
+  const { groupIssues, classifyIssue } = await import("../src/lib/issues");
+  const one = classifyIssue("Something nobody has seen before happened.");
+  assert.equal(one.severity, "notable");
+
+  const g = groupIssues(["Something nobody has seen before happened."]);
+  assert.equal(g.blocking.length, 0);
+  assert.equal(g.visible.length, 1, "it is surfaced rather than swallowed");
+});
+
+test("a clean state reports nothing at all", async () => {
+  const { groupIssues } = await import("../src/lib/issues");
+  const g = groupIssues([]);
+  assert.equal(g.visible.length, 0);
+  assert.equal(g.hiddenCount, 0);
+});

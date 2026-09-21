@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Logo } from "./Logo";
@@ -10,11 +9,9 @@ import {
   IconMonths,
   IconConfig,
   IconGuide,
-  IconMenu,
   IconProducts,
   IconReturns,
   IconUpload,
-  IconX,
 } from "./icons";
 
 const GROUPS: {
@@ -54,29 +51,45 @@ export function Sidebar({
   onSignOut: () => void;
 }) {
   const pathname = usePathname();
-  const [open, setOpen] = useState(false);
   const isActive = (href: string) => (href === "/" ? pathname === "/" : pathname.startsWith(href));
   const current =
     GROUPS.flatMap((g) => g.links).find((l) => isActive(l.href))?.label ?? "Quantum";
 
+  const primary = [
+    { href: "/months", label: "Months", icon: IconMonths },
+    { href: "/", label: "Calendar", icon: IconCalendar },
+    { href: "/products", label: "Products", icon: IconProducts },
+    { href: "/upload", label: "Upload", icon: IconUpload },
+    { href: "/guide", label: "Guide", icon: IconGuide },
+  ];
+
   return (
     <>
-      {/* Mobile header - the sidebar becomes a drawer below 1024px. */}
+      {/* Phone: a title bar plus a bottom tab bar, the way an app works. */}
       <div className="mobilebar">
-        <button
-          onClick={() => setOpen(true)}
-          aria-label="Open navigation"
-          className="rounded-lg p-1.5 text-white/85 hover:bg-white/10"
-        >
-          <IconMenu />
-        </button>
-        <Logo size={22} />
-        <span className="text-[14px] font-semibold">{current}</span>
+        <Logo size={24} />
+        <span className="text-[15px] font-semibold">{current}</span>
+        <form action={onSignOut} className="ml-auto">
+          <button className="rounded-lg px-2 py-1 text-[12px] font-semibold text-white/75" type="submit">
+            Sign out
+          </button>
+        </form>
       </div>
 
-      {open && <div className="scrim" onClick={() => setOpen(false)} />}
+      <nav className="tabbar">
+        {primary.map((l) => {
+          const Icon = l.icon;
+          return (
+            <Link key={l.href} href={l.href} className="tabitem" data-active={isActive(l.href)}>
+              <Icon />
+              {l.label}
+            </Link>
+          );
+        })}
+      </nav>
 
-      <aside className="sidebar" data-open={open}>
+      {/* Laptop and up: the full sidebar. */}
+      <aside className="sidebar">
         <div className="sidebar-brand">
           <Logo size={30} />
           <span className="flex flex-col leading-tight">
@@ -85,13 +98,6 @@ export function Sidebar({
               Tax Automation
             </span>
           </span>
-          <button
-            onClick={() => setOpen(false)}
-            aria-label="Close navigation"
-            className="ml-auto rounded-lg p-1 text-white/70 hover:bg-white/10 lg:hidden"
-          >
-            <IconX />
-          </button>
         </div>
 
         <nav className="pb-3">
@@ -101,13 +107,7 @@ export function Sidebar({
               {group.links.map((l) => {
                 const Icon = l.icon;
                 return (
-                  <Link
-                    key={l.href}
-                    href={l.href}
-                    className="navlink"
-                    data-active={isActive(l.href)}
-                    onClick={() => setOpen(false)}
-                  >
+                  <Link key={l.href} href={l.href} className="navlink" data-active={isActive(l.href)}>
                     <Icon />
                     {l.label}
                   </Link>
@@ -124,7 +124,7 @@ export function Sidebar({
           </div>
           <form action={onSignOut}>
             <button
-              className="w-full rounded-lg border border-white/20 px-3 py-1.5 text-[12px] font-semibold text-white/85 hover:bg-white/10"
+              className="w-full rounded-xl border border-white/20 px-3 py-2 text-[12px] font-semibold text-white/85 hover:bg-white/10"
               type="submit"
             >
               Sign out
