@@ -256,13 +256,20 @@ table.qtable tbody tr.flagged td { background: #fffbf2; }
 .btn-danger { border-color: var(--danger-line); color: var(--danger); background: var(--danger-soft); }
 .btn-danger:hover { background: #fadedc; }
 
-input[type="text"], input[type="password"], input[type="email"], input[type="number"],
-input[type="date"], select, textarea {
-  width: 100%; padding: 9px 12px;
-  border: 1px solid var(--line-strong); border-radius: 11px;
-  background: #fff; font-size: 13px; color: var(--ink); font-family: inherit;
+/*
+ * Tailwind v4 emits its utilities inside a cascade layer, and unlayered rules
+ * beat layered ones. Element defaults therefore live in @layer base, or a
+ * `w-[140px]` on a <select> silently loses to `width: 100%` here.
+ */
+@layer base {
+  input[type="text"], input[type="password"], input[type="email"], input[type="number"],
+  input[type="date"], select, textarea {
+    width: 100%; padding: 9px 12px;
+    border: 1px solid var(--line-strong); border-radius: 11px;
+    background: #fff; font-size: 13px; color: var(--ink); font-family: inherit;
+  }
+  input:focus, select:focus, textarea:focus { outline: 3px solid var(--q-100); border-color: var(--q-500); }
 }
-input:focus, select:focus, textarea:focus { outline: 3px solid var(--q-100); border-color: var(--q-500); }
 label.field {
   display: block; font-size: 10.5px; font-weight: 650; color: var(--muted);
   text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 5px;

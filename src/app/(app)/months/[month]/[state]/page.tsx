@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getMonthSnapshot, statesFromSnapshot } from "@/lib/months";
 import { getFiling } from "@/lib/calendar";
@@ -32,19 +31,6 @@ function Row({ label, value, strong, tone, note }: { label: string; value: strin
         {value}
       </span>
     </div>
-  );
-}
-
-function Section({ title, badge, actions, children }: { title: string; badge?: React.ReactNode; actions?: React.ReactNode; children: React.ReactNode }) {
-  return (
-    <section className="panel overflow-hidden">
-      <div className="panel-head">
-        {title}
-        {badge}
-        {actions && <span className="ml-auto flex items-center gap-2">{actions}</span>}
-      </div>
-      {children}
-    </section>
   );
 }
 
@@ -106,252 +92,196 @@ export default async function StateMonthPage({
 
   return (
     <div className="space-y-4">
-      <div className="panel p-6">
-        <div className="hero">
-          <div className="hero-label">{stateName(state)} · total tax due</div>
-          <div className="hero-value">{fmtMoney(totalDue)}</div>
-          <div className="hero-sub">
-            {s && `sales ${fmtMoney(s.taxComputed)}`}
+      <section className="panel p-5">
+        <div className="flex items-start gap-3">
+          <span className="tile-icon" style={{ background: "var(--q-100)", color: "var(--q-700)" }}>
+            {iconDoc}
+          </span>
+          <div>
+            <div className="text-[15px] font-semibold">{stateName(state)}</div>
+            <div className="text-[11.5px] text-[var(--muted)]">
+              {account?.accountNumber ? `Acct ${account.accountNumber}` : "State tax filing"}
+            </div>
+          </div>
+          <span className="badge badge-ready ml-auto">{summary.salesPeriod ?? month}</span>
+        </div>
+
+        <div className="mt-4">
+          <div className="text-[30px] font-bold tracking-tight tnum">{fmtMoney(totalDue)}</div>
+          <div className="text-[12px] text-[var(--muted)]">
+            total due
+            {s && ` · sales ${fmtMoney(s.taxComputed)}`}
             {e && ` · excise ${fmtMoney(e.taxComputed)}`}
-            {pa && pa.shipmentCount > 0 && ` · ${pa.shipmentCount} PACT lines`}
           </div>
         </div>
 
-        <div className="mt-5 grid gap-3 md:grid-cols-3">
+        <div className="mt-4 grid grid-cols-2 gap-2.5">
           {s && (
-            <div className="tile">
-              <span className="tile-icon" style={{ background: "var(--q-100)", color: "var(--q-700)" }}>
-                {iconDoc}
-              </span>
-              <div>
-                <div className="tile-title">{fmtMoney(s.taxComputed)}</div>
-                <div className="tile-sub">Sales tax · due {s.dueDate}</div>
-              </div>
+            <div className="rounded-xl border border-[var(--line)] p-3">
+              <div className="text-[15px] font-semibold tnum">{fmtMoney(s.taxComputed)}</div>
+              <div className="text-[11px] text-[var(--muted)]">Sales tax</div>
+              <div className="text-[11px] text-[var(--muted)]">Due {s.dueDate}</div>
             </div>
           )}
           {e && (
-            <div className="tile">
-              <span className="tile-icon" style={{ background: "var(--violet-soft)", color: "var(--violet)" }}>
-                {iconDrop}
-              </span>
-              <div>
-                <div className="tile-title">{fmtMoney(e.taxComputed)}</div>
-                <div className="tile-sub">Vapor excise · due {e.dueDate}</div>
-              </div>
+            <div className="rounded-xl border border-[var(--line)] p-3">
+              <div className="text-[15px] font-semibold tnum">{fmtMoney(e.taxComputed)}</div>
+              <div className="text-[11px] text-[var(--muted)]">Vapor excise</div>
+              <div className="text-[11px] text-[var(--muted)]">Due {e.dueDate}</div>
             </div>
           )}
           {pa && pa.shipmentCount > 0 && (
-            <div className="tile">
-              <span className="tile-icon" style={{ background: "var(--blue-soft)", color: "var(--blue)" }}>
-                {iconTruck}
-              </span>
-              <div>
-                <div className="tile-title">{pa.shipmentCount.toLocaleString()}</div>
-                <div className="tile-sub">PACT lines · due {pa.dueDate}</div>
-              </div>
+            <div className="rounded-xl border border-[var(--line)] p-3">
+              <div className="text-[15px] font-semibold tnum">{pa.shipmentCount.toLocaleString()}</div>
+              <div className="text-[11px] text-[var(--muted)]">PACT lines</div>
+              <div className="text-[11px] text-[var(--muted)]">Due {pa.dueDate}</div>
             </div>
           )}
         </div>
 
         {blocking.length > 0 && (
           <div className="callout callout-warn mt-4">
-            <strong>{blocking[0].title}.</strong> Do not file this state until it is resolved —
-            details at the bottom of the page.
+            <strong>{blocking[0].title}.</strong> Do not file this state yet — see below.
           </div>
         )}
-      </div>
+      </section>
 
-      <div className="grid gap-4 xl:grid-cols-[1fr_330px]">
-        <div className="space-y-4">
-          {s && summary.salesPeriod && (
-            <Section
-              title={`Sales / use tax · ${s.form ?? "return"} · ${s.periodLabel}`}
-              badge={<span className="badge badge-ready">due {s.dueDate}</span>}
-              actions={
-                <a className="btn btn-sm btn-primary" href={`/api/worksheet/${state}/sales/${summary.salesPeriod}`}>
-                  Worksheet
-                </a>
-              }
+      {s && summary.salesPeriod && (
+        <section className="panel overflow-hidden">
+          <div className="panel-head">
+            <span className="truncate">Sales / use tax · {s.form ?? "return"}</span>
+            <a
+              className="btn btn-sm btn-primary ml-auto"
+              href={`/api/worksheet/${state}/sales/${summary.salesPeriod}`}
             >
-              <div className="p-4">
-                <Row label="Gross sales" value={fmtMoney(s.gross)} />
-                <Row label="Exempt sales" value={fmtMoney(s.exempt)} />
-                <Row label="Taxable sales" value={fmtMoney(s.taxable)} strong />
-                <Row label="Tax due" value={fmtMoney(s.taxComputed)} strong note={`state rate ${fmtPct(s.stateRate)}`} />
-                <Row label="Collected by Avalara" value={fmtMoney(s.taxCollected)} />
-                <Row
-                  label={s.delta >= 0.01 ? "Under-collected (margin hit)" : s.delta <= -0.01 ? "Over-collected" : "Delta"}
-                  value={fmtMoney(s.delta)}
-                  tone={s.delta >= 0.01 ? "warn" : undefined}
-                />
-                <div className={`callout mt-3 ${s.reconciles ? "callout-ok" : "callout-warn"}`}>
-                  {s.reconciles
-                    ? "Taxable + Exempt = Gross. Reconciled."
-                    : `Reconciliation FAILED — off by ${s.reconcileDiff}. Do not file.`}
-                </div>
-              </div>
+              Worksheet
+            </a>
+          </div>
+          <div className="p-4">
+            <Row label="Gross sales" value={fmtMoney(s.gross)} />
+            <Row label="Exempt sales" value={fmtMoney(s.exempt)} />
+            <Row label="Taxable sales" value={fmtMoney(s.taxable)} strong />
+            <Row label={`Tax due · ${fmtPct(s.stateRate)}`} value={fmtMoney(s.taxComputed)} strong />
+            <Row label="Collected by Avalara" value={fmtMoney(s.taxCollected)} />
+            {s.delta >= 0.01 && (
+              <Row label="Under-collected" value={fmtMoney(s.delta)} tone="warn" />
+            )}
+            <div className={`callout mt-3 ${s.reconciles ? "callout-ok" : "callout-warn"}`}>
+              {s.reconciles
+                ? "Taxable + Exempt = Gross. Reconciled."
+                : `Reconciliation FAILED — off by ${s.reconcileDiff}.`}
+            </div>
+          </div>
 
-              {s.allocation !== "flat" && allocationLines(s).length > 0 && (
-                <table className="qtable">
-                  <caption className="px-4 pt-3 text-left text-[12px] font-semibold text-[var(--muted)]">
-                    {allocationLabel(s)}
-                  </caption>
-                  <thead>
-                    <tr>
-                      <th>Jurisdiction</th>
-                      <th>Code</th>
-                      <th>Paired</th>
-                      <th className="num">Taxable</th>
-                      <th className="num">Rate</th>
-                      <th className="num">Tax</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {allocationLines(s).map((l) => (
-                        <tr key={`${l.type}|${l.name}`} className={l.code ? "" : "flagged"}>
-                          <td>{l.name}</td>
-                          <td className={l.code ? "font-mono text-[11.5px]" : "text-[var(--danger)]"}>
-                            {l.code ?? "missing"}
-                          </td>
-                          <td className="font-mono text-[11.5px]">{l.pairedCode ?? ""}</td>
-                          <td className="num">{fmtMoney(l.taxable)}</td>
-                          <td className="num">{fmtPct(l.rate)}</td>
-                          <td className="num">{fmtMoney(l.tax)}</td>
-                        </tr>
-                      ))}
-                  </tbody>
-                </table>
-              )}
-
-              <div className="border-t border-[var(--line)] p-4">
-                <div className="field mb-2">How to file it</div>
-                <ol className="steps">
-                  {salesFormFor(state)
-                    .steps(s, {
-                      company: "Maximum Vapor Inc.",
-                      fein: "82-1098441",
-                      accountNumber: account?.accountNumber ?? null,
-                      licenseNumber: account?.licenseNumber ?? null,
-                      loginField: null,
-                      accountNotes: null,
-                    })
-                    .map((step, i) => (
-                      <li key={i}>{step}</li>
-                    ))}
-                </ol>
-              </div>
-            </Section>
-          )}
-
-          {e && summary.excisePeriod && (
-            <Section
-              title={`Vapor excise · ${e.form ?? "return"} · structure ${e.structure}`}
-              badge={
-                <>
-                  <span className="badge badge-ready">due {e.dueDate}</span>
-                  <span className={`badge ${e.basis === "RECEIPTS" ? "badge-not_started" : "badge-no_activity"}`}>
-                    {e.basis} basis
-                  </span>
-                </>
-              }
-              actions={
-                <a className="btn btn-sm" href={`/api/worksheet/${state}/excise/${summary.excisePeriod}`}>
-                  Worksheet
-                </a>
-              }
-            >
+          {s.allocation !== "flat" && s.byCounty.some((l) => l.gross !== 0 || l.tax !== 0) && (
+            <details className="border-t border-[var(--line)]">
+              <summary className="cursor-pointer px-4 py-3 text-[12.5px] font-semibold text-[var(--muted)] hover:bg-[#f8faf9]">
+                Jurisdiction breakdown
+              </summary>
               <table className="qtable">
                 <thead>
                   <tr>
-                    <th>Component</th>
-                    <th>Basis</th>
-                    <th className="num">Amount</th>
-                    <th>Rate</th>
+                    <th>Jurisdiction</th>
+                    <th>Code</th>
+                    <th className="num">Taxable</th>
                     <th className="num">Tax</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {e.components.map((c) => (
-                    <tr key={c.label}>
-                      <td>{c.label}</td>
-                      <td>{c.basisLabel}</td>
-                      <td className="num">{c.basisAmount.toLocaleString()}</td>
-                      <td className="text-[12px]">
-                        {c.rateUnit.startsWith("pct") ? fmtPct(c.rate) : fmtMoney(c.rate)}{" "}
-                        <span className="text-[var(--muted)]">{rateUnitLabel(c.rateUnit)}</span>
-                      </td>
-                      <td className="num font-semibold">{fmtMoney(c.tax)}</td>
-                    </tr>
-                  ))}
+                  {s.byCounty
+                    .filter((l) => l.gross !== 0 || l.tax !== 0)
+                    .map((l) => (
+                      <tr key={l.name} className={l.code ? "" : "flagged"}>
+                        <td className="max-w-[130px] truncate">{l.name}</td>
+                        <td className={l.code ? "font-mono text-[11px]" : "text-[var(--danger)]"}>
+                          {l.code ?? "missing"}
+                        </td>
+                        <td className="num">{fmtMoney(l.taxable)}</td>
+                        <td className="num">{fmtMoney(l.tax)}</td>
+                      </tr>
+                    ))}
                 </tbody>
               </table>
-              <div className="border-t border-[var(--line)] p-4">
-                <Row label="Total excise due" value={fmtMoney(e.taxComputed)} strong />
-              </div>
-            </Section>
+            </details>
           )}
 
-          {pa && pa.shipmentCount > 0 && (
-            <Section
-              title="PACT Act · ENDS report"
-              badge={<span className="badge badge-overdue">due {pa.dueDate}</span>}
-              actions={
-                <a className="btn btn-sm" href={`/api/worksheet/${state}/pact/${month}`}>
-                  Worksheet
-                </a>
-              }
+          <details className="border-t border-[var(--line)]">
+            <summary className="cursor-pointer px-4 py-3 text-[12.5px] font-semibold text-[var(--muted)] hover:bg-[#f8faf9]">
+              How to file it
+            </summary>
+            <div className="p-4">
+              <ol className="steps">
+                {salesFormFor(state)
+                  .steps(s, {
+                    company: "Maximum Vapor Inc.",
+                    fein: "82-1098441",
+                    accountNumber: account?.accountNumber ?? null,
+                    licenseNumber: account?.licenseNumber ?? null,
+                    loginField: null,
+                    accountNotes: null,
+                  })
+                  .map((step, i) => (
+                    <li key={i}>{step}</li>
+                  ))}
+              </ol>
+            </div>
+          </details>
+        </section>
+      )}
+
+      {e && summary.excisePeriod && (
+        <section className="panel overflow-hidden">
+          <div className="panel-head">
+            <span className="truncate">Vapor excise · structure {e.structure}</span>
+            <a
+              className="btn btn-sm ml-auto"
+              href={`/api/worksheet/${state}/excise/${summary.excisePeriod}`}
             >
-              <div className="p-4">
-                <Row label="Shipment lines to report" value={pa.shipmentCount.toLocaleString()} strong />
-                <Row label="Total quantity" value={pa.totalQuantity.toLocaleString()} />
-                <Row
-                  label="Data source"
-                  value={pa.source === "shipments" ? "Shipment feed" : "Avalara export (incomplete)"}
-                />
-                <p className="mt-3 text-[11.5px] text-[var(--muted)]">
-                  Customer names and addresses are in the downloaded worksheet only — never rendered
-                  here.
-                </p>
-              </div>
-            </Section>
-          )}
-        </div>
-
-        <aside className="space-y-4">
-          {s && summary.salesPeriod && (
-            <FiledForm
-              state={state}
-              taxType="sales"
-              period={summary.salesPeriod}
-              filed={salesFiling?.status === "filed"}
-              confirmationNumber={salesFiling?.confirmationNumber ?? ""}
-              filedAt={salesFiling?.filedAt ? salesFiling.filedAt.toISOString().slice(0, 10) : null}
-              filedBy={salesFiling?.filedBy ?? null}
-              suggestedAmount={s.taxComputed}
-            />
-          )}
-          {e && summary.excisePeriod && (
-            <FiledForm
-              state={state}
-              taxType="excise"
-              period={summary.excisePeriod}
-              filed={exciseFiling?.status === "filed"}
-              confirmationNumber={exciseFiling?.confirmationNumber ?? ""}
-              filedAt={exciseFiling?.filedAt ? exciseFiling.filedAt.toISOString().slice(0, 10) : null}
-              filedBy={exciseFiling?.filedBy ?? null}
-              suggestedAmount={e.taxComputed}
-            />
-          )}
-          <div className="help">
-            Sales tax, excise and PACT are <strong>three separate returns</strong> on different
-            accounts with different due dates. Filing one does not file the others.{" "}
-            <Link className="font-semibold text-[var(--accent)]" href="/guide#excise">
-              More on that
-            </Link>
-            .
+              Worksheet
+            </a>
           </div>
-        </aside>
-      </div>
+          <div className="p-4">
+            {e.components.map((c) => (
+              <Row
+                key={c.label}
+                label={`${c.label} · ${rateUnitLabel(c.rateUnit)}`}
+                value={fmtMoney(c.tax)}
+              />
+            ))}
+            <Row label="Total excise due" value={fmtMoney(e.taxComputed)} strong />
+            <div className="mt-2 text-[11.5px] text-[var(--muted)]">
+              {e.basis === "RECEIPTS"
+                ? "Receipts basis — taxes what you purchased, not what you sold."
+                : "Sales basis — taxes what you sold this period."}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {s && summary.salesPeriod && (
+        <FiledForm
+          state={state}
+          taxType="sales"
+          period={summary.salesPeriod}
+          filed={salesFiling?.status === "filed"}
+          confirmationNumber={salesFiling?.confirmationNumber ?? ""}
+          filedAt={salesFiling?.filedAt ? salesFiling.filedAt.toISOString().slice(0, 10) : null}
+          filedBy={salesFiling?.filedBy ?? null}
+          suggestedAmount={s.taxComputed}
+        />
+      )}
+      {e && summary.excisePeriod && (
+        <FiledForm
+          state={state}
+          taxType="excise"
+          period={summary.excisePeriod}
+          filed={exciseFiling?.status === "filed"}
+          confirmationNumber={exciseFiling?.confirmationNumber ?? ""}
+          filedAt={exciseFiling?.filedAt ? exciseFiling.filedAt.toISOString().slice(0, 10) : null}
+          filedBy={exciseFiling?.filedBy ?? null}
+          suggestedAmount={e.taxComputed}
+        />
+      )}
 
       <IssueList warnings={allWarnings} />
     </div>
@@ -362,18 +292,5 @@ const iconDoc = (
   <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
     <path d="M5 3h9l5 5v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" />
     <path d="M14 3v5h5M8 13h8M8 17h5" />
-  </svg>
-);
-
-const iconDrop = (
-  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M12 3s6 6.4 6 10a6 6 0 0 1-12 0c0-3.6 6-10 6-10z" />
-  </svg>
-);
-
-const iconTruck = (
-  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M3 7h11v9H3zM14 10h4l3 3v3h-7z" />
-    <circle cx="7" cy="18" r="1.6" /><circle cx="17.5" cy="18" r="1.6" />
   </svg>
 );
