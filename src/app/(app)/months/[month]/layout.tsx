@@ -19,17 +19,16 @@ function Card({
   label: string;
   value: string;
   sub?: string;
-  tone?: "warn" | "ok" | "info" | "amber";
+  tone?: "green" | "violet" | "blue" | "amber" | "warn";
   icon: React.ReactNode;
 }) {
-  const skin =
-    tone === "warn"
-      ? { bg: "var(--danger-soft)", fg: "var(--danger)" }
-      : tone === "amber"
-        ? { bg: "var(--amber-soft)", fg: "var(--amber)" }
-        : tone === "info"
-          ? { bg: "var(--blue-soft)", fg: "var(--blue)" }
-          : { bg: "var(--q-100)", fg: "var(--q-700)" };
+  const skin = {
+    green: { bg: "var(--green-soft)", fg: "var(--green)" },
+    violet: { bg: "var(--violet-soft)", fg: "var(--violet)" },
+    blue: { bg: "var(--blue-soft)", fg: "var(--blue)" },
+    amber: { bg: "var(--amber-soft)", fg: "var(--amber)" },
+    warn: { bg: "var(--danger-soft)", fg: "var(--danger)" },
+  }[tone ?? "violet"];
 
   return (
     <div className="stat">
@@ -128,35 +127,40 @@ export default async function MonthLayout({
         <Card
           label="Total tax due"
           value={fmtMoney(num(snapshot.totalTax))}
-          sub={`sales ${fmtMoney(num(snapshot.salesTax))} · excise ${fmtMoney(num(snapshot.exciseTax))}`}
+          sub={`Gross sales: ${fmtMoney(num(snapshot.gross))}`}
+          tone="green"
           icon={iconCoins}
         />
         <Card
           label="Under-collected"
           value={fmtMoney(Math.max(0, delta))}
-          tone={delta >= 0.01 ? "warn" : "ok"}
-          sub={delta >= 0.01 ? "comes out of margin" : "nothing outstanding"}
+          tone={delta >= 0.01 ? "warn" : "violet"}
+          sub={delta >= 0.01 ? "Needs attention" : "Nothing outstanding"}
           icon={iconAlert}
         />
         <Card
-          label="To review"
+          label="Action items"
           value={snapshot.warnings.toLocaleString()}
-          tone="amber"
-          sub="across all states"
+          tone="blue"
+          sub="Pending across states"
           icon={iconList}
         />
         <Card
           label="PACT lines"
           value={snapshot.pactShipments.toLocaleString()}
-          tone="info"
-          sub="shipments to report"
+          tone="amber"
+          sub="Shipments to report"
           icon={iconTruck}
         />
       </div>
 
-      <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_400px]">
+      <div className="mt-4 grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_400px] 2xl:grid-cols-[minmax(0,1fr)_460px]">
         <MonthBreakdown month={month} states={states} />
-        <div>{children}</div>
+        {/* The panel scrolls on its own so picking a state never drags the
+            whole page down with it. */}
+        <div className="xl:sticky xl:top-4 xl:max-h-[calc(100vh-2rem)] xl:overflow-y-auto xl:pr-1">
+          {children}
+        </div>
       </div>
     </div>
   );

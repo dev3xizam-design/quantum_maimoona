@@ -28,6 +28,7 @@ export function MatchReview({ rows }: { rows: MatchRow[] }) {
 
   return (
     <div>
+      <div className="overflow-x-auto">
       <table className="qtable">
         <thead>
           <tr>
@@ -71,6 +72,7 @@ export function MatchReview({ rows }: { rows: MatchRow[] }) {
           ))}
         </tbody>
       </table>
+      </div>
       <p className="mt-2 text-[11.5px] text-[var(--muted)]">
         Rejecting is permanent — a later sync will not re-match that variant.
       </p>

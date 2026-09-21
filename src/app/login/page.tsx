@@ -20,7 +20,7 @@ export default async function LoginPage() {
       className="flex min-h-screen items-center justify-center px-6"
       style={{
         background:
-          "radial-gradient(1200px 600px at 50% -10%, #dcf5e5 0%, transparent 60%), var(--bg)",
+          "radial-gradient(1200px 600px at 50% -10%, #ede9fe 0%, transparent 62%), var(--bg)",
       }}
     >
       <div className="w-full max-w-[380px]">

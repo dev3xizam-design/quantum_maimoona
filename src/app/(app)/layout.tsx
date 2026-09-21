@@ -8,9 +8,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <div className="shell">
       <Sidebar user={session} onSignOut={logout} />
       <div className="flex min-h-screen flex-col">
-        <main className="w-full max-w-[1400px] flex-1 px-6 py-6">{children}</main>
+        <main className="mx-auto w-full max-w-[1760px] flex-1 px-4 py-5 sm:px-6 sm:py-6">{children}</main>
         <footer className="border-t border-[var(--line)] bg-white">
-          <div className="flex max-w-[1400px] flex-wrap items-center gap-x-6 gap-y-1 px-6 py-3 text-[11px] text-[var(--muted)]">
+          <div className="mx-auto flex w-full max-w-[1760px] flex-wrap items-center gap-x-6 gap-y-1 px-4 py-3 text-[11px] text-[var(--muted)] sm:px-6">
             <span>
               Quantum prepares returns; a person files them. Every figure is a formula or a lookup,
               never an estimate.

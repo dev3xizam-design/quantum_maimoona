@@ -74,7 +74,7 @@ export function MonthBreakdown({ month, states }: { month: string; states: State
         </div>
       </div>
 
-      <div className="max-h-[560px] overflow-auto">
+      <div className="max-h-[68vh] min-h-[280px] overflow-auto">
         <table className="qtable">
           <thead>
             <tr>

@@ -6,8 +6,8 @@ export function Logo({ size = 28, showWordmark = false }: { size?: number; showW
       <Image
         src="/brand/quantum-logo-600.png"
         alt="Quantum"
-        width={600}
-        height={225}
+        width={1291}
+        height={332}
         priority
         style={{ height: size, width: "auto" }}
       />
@@ -17,8 +17,8 @@ export function Logo({ size = 28, showWordmark = false }: { size?: number; showW
     <Image
       src="/brand/quantum-mark-256.png"
       alt="Quantum"
-      width={256}
-      height={256}
+      width={347}
+      height={332}
       priority
       style={{ height: size, width: size }}
     />

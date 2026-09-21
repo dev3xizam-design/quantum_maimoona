@@ -1,51 +1,58 @@
 @import "tailwindcss";
 
 /* ------------------------------------------------------------------ *
- * Quantum — palette sampled from the logo, softened for long sessions.
+ * Quantum — violet ramp sampled from the logo mark, navy shell.
  * ------------------------------------------------------------------ */
 :root {
-  --q-950: #042416;
-  --q-900: #05301f;
-  --q-800: #0a4429;
-  --q-700: #0f5b33;
-  --q-600: #16803f;
-  --q-500: #1f9b4d;
-  --q-400: #3fbe6e;
-  --q-300: #6fd695;
-  --q-200: #a9e9c2;
-  --q-100: #dcf5e5;
-  --q-50:  #f1fbf5;
+  /* Brand violet, straight off the logo gradient. */
+  --q-950: #1e0f6b;
+  --q-900: #2a10a0;
+  --q-800: #3018c0;
+  --q-700: #3c24d8;
+  --q-600: #4830f0;
+  --q-500: #6d3df0;
+  --q-400: #843cf0;
+  --q-300: #a78bfa;
+  --q-200: #ddd6fe;
+  --q-100: #ede9fe;
+  --q-50:  #f5f3ff;
 
-  /* Accents for tiles, kept muted so numbers stay the loudest thing. */
-  --blue: #3b6fd4;   --blue-soft: #e8efff;
-  --violet: #7a5cd6; --violet-soft: #f0ebff;
-  --amber: #c07a12;  --amber-soft: #fff2d9;
-  --rose: #c8506a;   --rose-soft: #ffeaef;
-  --teal: #12897f;   --teal-soft: #dcf5f2;
+  /* Navy shell for the sidebar. */
+  --nav-900: #0b1020;
+  --nav-800: #111a2e;
+  --nav-700: #1b2440;
 
-  --bg: #f6f8f7;
+  /* Card accents — each tile gets its own, and they are all in use. */
+  --blue: #2563eb;   --blue-soft: #e6edff;
+  --violet: #6d3df0; --violet-soft: #ede9fe;
+  --amber: #b45309;  --amber-soft: #fff3e0;
+  --rose: #be123c;   --rose-soft: #ffe8ed;
+  --teal: #0d9488;   --teal-soft: #d9f5f2;
+  --green: #059669;  --green-soft: #dcfce7;
+
+  --bg: #f6f7fc;
   --panel: #ffffff;
-  --ink: #0e1a14;
-  --ink-2: #3a4a42;
-  --muted: #6f8279;
-  --line: #e6ece9;
-  --line-strong: #d3ded8;
+  --ink: #0f1630;
+  --ink-2: #3b4463;
+  --muted: #6b7490;
+  --line: #e7e9f2;
+  --line-strong: #d4d8e6;
 
-  --accent: var(--q-700);
+  --accent: var(--q-600);
   --accent-soft: var(--q-100);
 
-  --danger: #b3261e;
-  --danger-soft: #fdeceb;
-  --danger-line: #f6cbc8;
-  --warn: #9a6400;
-  --warn-soft: #fff6e6;
-  --warn-line: #f3dfb8;
-  --ok: var(--q-600);
-  --ok-soft: var(--q-100);
+  --danger: #d1293d;
+  --danger-soft: #ffeaed;
+  --danger-line: #f9ccd3;
+  --warn: #b45309;
+  --warn-soft: #fff3e0;
+  --warn-line: #f5dcb8;
+  --ok: var(--green);
+  --ok-soft: var(--green-soft);
 
-  --shadow-sm: 0 1px 2px rgba(5, 48, 31, 0.05), 0 1px 3px rgba(5, 48, 31, 0.04);
-  --shadow-md: 0 4px 16px rgba(5, 48, 31, 0.07);
-  --shadow-lg: 0 12px 34px rgba(5, 48, 31, 0.10);
+  --shadow-sm: 0 1px 2px rgba(15, 22, 48, 0.05), 0 1px 3px rgba(15, 22, 48, 0.04);
+  --shadow-md: 0 4px 16px rgba(15, 22, 48, 0.08);
+  --shadow-lg: 0 12px 34px rgba(15, 22, 48, 0.12);
   --radius: 16px;
   --radius-sm: 11px;
 }
@@ -85,7 +92,7 @@ a { color: inherit; text-decoration: none; }
 .sidebar {
   position: sticky; top: 0; align-self: start; height: 100vh;
   display: flex; flex-direction: column;
-  background: linear-gradient(170deg, var(--q-900) 0%, var(--q-800) 58%, #073822 100%);
+  background: linear-gradient(180deg, var(--nav-900) 0%, var(--nav-800) 55%, var(--nav-700) 100%);
   color: #fff; overflow-y: auto; overscroll-behavior: contain; z-index: 40;
 }
 .sidebar-brand {
@@ -106,10 +113,11 @@ a { color: inherit; text-decoration: none; }
 }
 .navlink:hover { background: rgba(255, 255, 255, 0.1); color: #fff; }
 .navlink[data-active="true"] {
-  background: rgba(255, 255, 255, 0.15); color: #fff; font-weight: 650;
+  background: linear-gradient(100deg, var(--q-600), var(--q-500));
+  color: #fff; font-weight: 650; box-shadow: 0 4px 14px rgba(72, 48, 240, 0.35);
 }
 .navlink svg { flex: none; opacity: 0.8; }
-.navlink[data-active="true"] svg { opacity: 1; color: var(--q-300); }
+.navlink[data-active="true"] svg { opacity: 1; color: #fff; }
 .sidebar-foot { margin-top: auto; padding: 14px; border-top: 1px solid rgba(255, 255, 255, 0.08); }
 
 .mobilebar, .tabbar { display: none; }
@@ -121,7 +129,7 @@ a { color: inherit; text-decoration: none; }
   .mobilebar {
     display: flex; align-items: center; gap: 10px;
     padding: 12px 16px;
-    background: linear-gradient(120deg, var(--q-900), var(--q-800));
+    background: linear-gradient(120deg, var(--nav-900), var(--nav-800));
     color: #fff; position: sticky; top: 0; z-index: 30;
   }
 
@@ -138,7 +146,7 @@ a { color: inherit; text-decoration: none; }
     padding: 7px 2px; border-radius: 12px;
     font-size: 10.5px; font-weight: 600; color: var(--muted);
   }
-  .tabitem[data-active="true"] { color: var(--q-700); background: var(--q-50); }
+  .tabitem[data-active="true"] { color: var(--q-600); background: var(--q-50); }
   .tabitem svg { opacity: 0.75; }
   .tabitem[data-active="true"] svg { opacity: 1; }
 
@@ -204,16 +212,16 @@ a { color: inherit; text-decoration: none; }
 
 table.qtable { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; }
 table.qtable th {
-  position: sticky; top: 0; z-index: 2; background: #f8faf9;
+  position: sticky; top: 0; z-index: 2; background: #f9fafd;
   text-align: left; font-weight: 650; color: var(--ink-2);
   font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase;
   padding: 11px 14px; border-bottom: 1px solid var(--line-strong); white-space: nowrap;
 }
 table.qtable td { padding: 12px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
 table.qtable tbody tr:last-child td { border-bottom: 0; }
-table.qtable tbody tr:hover td { background: #f8faf9; }
+table.qtable tbody tr:hover td { background: #f9fafd; }
 table.qtable td.num, table.qtable th.num { text-align: right; font-variant-numeric: tabular-nums; }
-table.qtable tbody tr.flagged td { background: #fffbf2; }
+table.qtable tbody tr.flagged td { background: var(--q-50); }
 
 /* ---------------------------------------------------------------- */
 /* Badges & pills                                                    */
@@ -226,10 +234,10 @@ table.qtable tbody tr.flagged td { background: #fffbf2; }
   white-space: nowrap; border: 1px solid transparent;
 }
 .badge-overdue { background: var(--danger-soft); color: var(--danger); border-color: var(--danger-line); }
-.badge-ready { background: var(--accent-soft); color: var(--q-800); border-color: var(--q-200); }
-.badge-filed { background: var(--ok-soft); color: var(--q-800); border-color: var(--q-200); }
+.badge-ready { background: var(--q-100); color: var(--q-800); border-color: var(--q-200); }
+.badge-filed { background: var(--green-soft); color: #065f46; border-color: #a7f3d0; }
 .badge-not_started { background: var(--warn-soft); color: var(--warn); border-color: var(--warn-line); }
-.badge-no_activity { background: #f1f4f2; color: var(--muted); border-color: var(--line); }
+.badge-no_activity { background: #f1f3f9; color: var(--muted); border-color: var(--line); }
 
 /* ---------------------------------------------------------------- */
 /* Controls                                                          */
@@ -242,17 +250,18 @@ table.qtable tbody tr.flagged td { background: #fffbf2; }
   cursor: pointer; white-space: nowrap;
   transition: background 0.13s, border-color 0.13s, transform 0.13s, box-shadow 0.13s;
 }
-.btn:hover { background: #f3f7f5; border-color: var(--muted); }
+.btn:hover { background: #f4f5fb; border-color: var(--muted); }
 .btn:active { transform: translateY(1px); }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .btn-primary {
-  background: linear-gradient(180deg, var(--q-500), var(--q-700));
-  border-color: var(--q-800); color: #fff; box-shadow: var(--shadow-sm);
+  background: linear-gradient(180deg, var(--q-500), var(--q-600));
+  border-color: var(--q-700); color: #fff;
+  box-shadow: 0 4px 12px rgba(72, 48, 240, 0.28);
 }
-.btn-primary:hover { background: linear-gradient(180deg, var(--q-600), var(--q-800)); }
+.btn-primary:hover { background: linear-gradient(180deg, var(--q-600), var(--q-700)); }
 .btn-sm { padding: 6px 12px; font-size: 12px; border-radius: 9px; }
 .btn-ghost { border-color: transparent; background: transparent; }
-.btn-ghost:hover { background: #eef3f0; }
+.btn-ghost:hover { background: #eef0f8; }
 .btn-danger { border-color: var(--danger-line); color: var(--danger); background: var(--danger-soft); }
 .btn-danger:hover { background: #fadedc; }
 
@@ -281,8 +290,10 @@ label.field {
 
 .pagehead {
   position: sticky; top: 0; z-index: 20;
-  margin: -22px -22px 20px; padding: 20px 22px 0;
-  background: linear-gradient(180deg, var(--bg) 80%, rgba(246, 248, 247, 0.9) 100%);
+  /* The negative margin must match <main>'s padding exactly, or the header is
+     wider than the viewport and the whole page scrolls sideways. */
+  margin: -24px -24px 20px; padding: 24px 24px 0;
+  background: linear-gradient(180deg, var(--bg) 80%, rgba(246, 247, 252, 0.9) 100%);
   backdrop-filter: saturate(180%) blur(8px);
   border-bottom: 1px solid var(--line);
 }
@@ -300,15 +311,15 @@ label.field {
   background: none; border-top: 0; border-left: 0; border-right: 0;
   transition: color 0.13s, background 0.13s;
 }
-.tab:hover { color: var(--ink); background: rgba(15, 91, 51, 0.05); }
+.tab:hover { color: var(--ink); background: rgba(72, 48, 240, 0.06); }
 .tab[data-active="true"] {
-  color: var(--q-700); border-bottom-color: var(--q-600); font-weight: 680;
-  background: rgba(15, 91, 51, 0.06);
+  color: var(--q-600); border-bottom-color: var(--q-600); font-weight: 680;
+  background: rgba(72, 48, 240, 0.07);
 }
 .tab-count {
   display: inline-flex; align-items: center; justify-content: center;
   min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px;
-  background: #e9eeeb; color: var(--ink-2);
+  background: #eceef7; color: var(--ink-2);
   font-size: 10.5px; font-weight: 700; font-variant-numeric: tabular-nums;
 }
 .tab[data-active="true"] .tab-count { background: var(--q-600); color: #fff; }
@@ -321,15 +332,15 @@ label.field {
 
 .callout { border-radius: 13px; padding: 13px 16px; font-size: 13px; line-height: 1.55; border: 1px solid; }
 .callout-warn { background: var(--danger-soft); color: #7a1f19; border-color: var(--danger-line); }
-.callout-note { background: #f4f7f5; color: var(--ink-2); border-color: var(--line); }
-.callout-ok { background: var(--ok-soft); color: var(--q-900); border-color: var(--q-200); }
+.callout-note { background: #f5f6fb; color: var(--ink-2); border-color: var(--line); }
+.callout-ok { background: var(--green-soft); color: #065f46; border-color: #a7f3d0; }
 
 .help {
-  border-left: 3px solid var(--q-400); background: var(--q-50);
+  border-left: 3px solid var(--q-500); background: var(--q-50);
   padding: 12px 16px; border-radius: 0 12px 12px 0;
   font-size: 12.5px; color: var(--ink-2); line-height: 1.6;
 }
-.help strong { color: var(--q-800); }
+.help strong { color: var(--q-700); }
 
 /* An issue list, not a wall of red boxes. */
 .issue { display: flex; gap: 11px; padding: 11px 14px; border-bottom: 1px solid var(--line); }
@@ -349,7 +360,7 @@ label.field {
 .steps > li::before {
   content: counter(step); position: absolute; left: 0; top: 0;
   width: 24px; height: 24px; border-radius: 999px;
-  background: var(--q-100); color: var(--q-800);
+  background: var(--q-100); color: var(--q-700);
   font-size: 11px; font-weight: 750;
   display: flex; align-items: center; justify-content: center;
 }
@@ -359,10 +370,10 @@ label.field {
   padding: 52px 24px; text-align: center; color: var(--muted); font-size: 13px;
 }
 
-.progressbar { height: 7px; border-radius: 999px; background: #e9eeeb; overflow: hidden; }
+.progressbar { height: 7px; border-radius: 999px; background: #eceef7; overflow: hidden; }
 .progressbar > span {
   display: block; height: 100%; border-radius: 999px;
-  background: linear-gradient(90deg, var(--q-500), var(--q-400)); transition: width 0.25s ease;
+  background: linear-gradient(90deg, var(--q-600), var(--q-400)); transition: width 0.25s ease;
 }
 
 details > summary::-webkit-details-marker { display: none; }
@@ -375,7 +386,7 @@ details > summary { list-style: none; }
 @media (max-width: 1023px) {
   /* A sticky header plus a tab strip eats a phone screen, so let it scroll
      away — the bottom tab bar is the persistent navigation there. */
-  .pagehead { position: static; margin: -18px -18px 16px; padding: 16px 18px 0; }
+  .pagehead { position: static; margin: -20px -16px 16px; padding: 20px 16px 0; }
   .page-title { font-size: 20px; }
 
   /* One swipeable row instead of forty-two wrapped chips. */

@@ -31,7 +31,7 @@ function StoreForm({ store, onDone }: { store?: ConnectionView; onDone?: () => v
       className="space-y-3 rounded-lg border border-[var(--line)] bg-[#f8fbf9] p-4"
     >
       {store && <input type="hidden" name="id" value={store.id} />}
-      <div className="grid gap-3 md:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <div>
           <label className="field">Store name</label>
           <input name="name" type="text" defaultValue={store?.name ?? ""} placeholder="MIA Tyson Vape Deals" required />
@@ -229,6 +229,7 @@ export function StoresPanel({
               see it on a month →
             </Link>
           </div>
+          <div className="overflow-x-auto">
           <table className="qtable">
             <thead>
               <tr>
@@ -253,6 +254,7 @@ export function StoresPanel({
               ))}
             </tbody>
           </table>
+          </div>
           <div className="help m-4">
             These rows are what PACT reports are built from. Historical Shopify orders go in through{" "}
             <Link className="font-semibold text-[var(--accent)]" href="/upload/shopify">
