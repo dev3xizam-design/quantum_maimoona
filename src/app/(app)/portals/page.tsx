@@ -1,6 +1,7 @@
 import { asc } from "drizzle-orm";
 import { db } from "@/db";
 import { portals } from "@/db/schema";
+import { shapeOf } from "@/lib/portal-secrets";
 import { PortalsView } from "./PortalsView";
 
 export const dynamic = "force-dynamic";
@@ -27,6 +28,9 @@ export default async function PortalsPage() {
         frequency: r.frequency,
         status: r.status,
         notes: r.notes,
+        // Which credentials exist, never what they are. The values come
+        // later, one card at a time, through the reveal action.
+        secrets: shapeOf(r.secretCipher),
       }))}
       fein={process.env.COMPANY_FEIN ?? "82-1098441"}
     />

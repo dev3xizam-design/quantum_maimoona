@@ -142,7 +142,7 @@ function filingSheet(wb: ExcelJS.Workbook, r: AnyResult, ctx: FormCtx, steps: st
 
   noteRow(
     ws,
-    "This worksheet PREPARES the return. A human files it. Never store portal passwords, PINs, card numbers or bank credentials in this system - they belong in a password manager only.",
+    "This worksheet PREPARES the return. A human files it. Portal logins live on the Portals page, encrypted; never store card numbers, CVVs or bank credentials anywhere in this system.",
     "note",
     6,
   );

@@ -1,8 +1,16 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { deletePortal, savePortal } from "@/app/actions/portals";
+import { deletePortal, revealSecrets, savePortal } from "@/app/actions/portals";
+import type { PortalSecrets } from "@/lib/portal-secrets";
 import { stateName } from "@/lib/states";
+
+export type SecretShape = {
+  password: boolean;
+  pin: boolean;
+  securityAnswers: boolean;
+  codes: boolean;
+};
 
 export type PortalRow = {
   id: number;
@@ -15,6 +23,8 @@ export type PortalRow = {
   frequency: string | null;
   status: string;
   notes: string | null;
+  /** What is stored, not what it is. Values arrive only on Reveal. */
+  secrets: SecretShape;
 };
 
 const TABS = [
@@ -103,6 +113,130 @@ function CopyChip({
   );
 }
 
+/** Masked until asked for, and it re-masks itself so it cannot be left open. */
+function SecretChip({
+  label,
+  value,
+  onCopied,
+  multiline,
+}: {
+  label: string;
+  value: string;
+  onCopied: (what: string) => void;
+  multiline?: boolean;
+}) {
+  const [shown, setShown] = useState(false);
+  const [hit, setHit] = useState(false);
+  if (!value) return null;
+
+  return (
+    <div className="secretrow">
+      <span className="copychip-label">{label}</span>
+      <span className="secretvalue" data-shown={shown} data-multiline={multiline ? "true" : undefined}>
+        {shown ? value : "••••••••••"}
+      </span>
+      <button
+        type="button"
+        className="btn btn-sm btn-ghost secretbtn"
+        onClick={() => setShown((v) => !v)}
+      >
+        {shown ? "Hide" : "Show"}
+      </button>
+      <button
+        type="button"
+        className="btn btn-sm secretbtn"
+        data-hit={hit}
+        onClick={async () => {
+          if (!(await copy(value))) return;
+          setHit(true);
+          onCopied(label);
+          setTimeout(() => setHit(false), 900);
+        }}
+      >
+        {hit ? "Copied" : "Copy"}
+      </button>
+    </div>
+  );
+}
+
+/**
+ * Nothing secret is in the page until this is clicked. The click calls the
+ * server, which decrypts that one account and returns it to this component
+ * alone, and Lock throws it away again.
+ */
+function SecretPanel({
+  row,
+  onCopied,
+}: {
+  row: PortalRow;
+  onCopied: (what: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [data, setData] = useState<PortalSecrets | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const stored = [
+    row.secrets.password && "password",
+    row.secrets.pin && "PIN",
+    row.secrets.securityAnswers && "answers",
+    row.secrets.codes && "codes",
+  ].filter(Boolean) as string[];
+
+  if (!stored.length) return null;
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        className="revealbtn"
+        disabled={busy}
+        onClick={async () => {
+          setBusy(true);
+          setError(null);
+          try {
+            setData(await revealSecrets(row.id));
+            setOpen(true);
+          } catch (e) {
+            setError(e instanceof Error ? e.message : "Could not read these credentials.");
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="4" y="10" width="16" height="10" rx="2" />
+          <path d="M8 10V7a4 4 0 0 1 8 0v3" />
+        </svg>
+        {busy ? "Unlocking…" : `Reveal ${stored.join(", ")}`}
+        {error && <span className="revealerr">{error}</span>}
+      </button>
+    );
+  }
+
+  return (
+    <div className="secretbox">
+      <div className="secretbox-head">
+        <span>Credentials</span>
+        <button
+          type="button"
+          className="btn btn-sm btn-ghost ml-auto"
+          onClick={() => {
+            setData(null);
+            setOpen(false);
+          }}
+        >
+          Lock
+        </button>
+      </div>
+      <SecretChip label="Password" value={data?.password ?? ""} onCopied={onCopied} />
+      <SecretChip label="PIN" value={data?.pin ?? ""} onCopied={onCopied} />
+      <SecretChip label="Security answers" value={data?.securityAnswers ?? ""} onCopied={onCopied} multiline />
+      <SecretChip label="Codes" value={data?.codes ?? ""} onCopied={onCopied} multiline />
+    </div>
+  );
+}
+
 function Fields({ r }: { r?: PortalRow }) {
   return (
     <div className="formgrid">
@@ -146,6 +280,39 @@ function Fields({ r }: { r?: PortalRow }) {
       <div className="col-span-full">
         <label className="field">Notes</label>
         <input name="notes" defaultValue={r?.notes ?? ""} />
+      </div>
+
+      {/* Boxes start empty even when something is saved: the plaintext must
+          not sit in the page's HTML. Blank keeps what is there already. */}
+      <div className="col-span-full secretfields">
+        <div className="secretfields-head">
+          Credentials — encrypted before they are stored
+          {r && <span className="secretfields-hint">blank leaves the saved value alone</span>}
+        </div>
+        <div className="formgrid">
+          <div>
+            <label className="field">Password</label>
+            <input name="password" type="password" autoComplete="new-password" placeholder={r?.secrets.password ? "•••••• saved" : ""} />
+          </div>
+          <div>
+            <label className="field">PIN</label>
+            <input name="pin" type="password" autoComplete="off" placeholder={r?.secrets.pin ? "•••••• saved" : ""} />
+          </div>
+          <div>
+            <label className="field">Codes</label>
+            <input name="codes" autoComplete="off" placeholder={r?.secrets.codes ? "•••••• saved" : "activation / access code"} />
+          </div>
+          <div className="col-span-full">
+            <label className="field">Security answers</label>
+            <input name="securityAnswers" autoComplete="off" placeholder={r?.secrets.securityAnswers ? "•••••• saved" : "question — answer"} />
+          </div>
+          {r && (
+            <label className="col-span-full checkline">
+              <input type="checkbox" name="clearSecrets" />
+              Delete every credential saved for this account
+            </label>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -234,9 +401,10 @@ export function PortalsView({ rows, fein }: { rows: PortalRow[]; fein: string })
       </div>
 
       <div className="callout callout-note">
-        Passwords, PINs and security answers are <strong>not</strong> stored here, on purpose — keep
-        those in your password manager. This page holds only what is safe to keep: the link, the
-        login ID, and the licence or account number.
+        Passwords, PINs, security answers and codes are encrypted before they are stored, stay
+        hidden until you press <strong>Reveal</strong> on a card, and are never written to a log.
+        Anyone who can sign in to Quantum can reveal them — so treat a Quantum login as the key to
+        every state portal, and never paste a card number or a bank login into these boxes.
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -281,6 +449,8 @@ export function PortalsView({ rows, fein }: { rows: PortalRow[]; fein: string })
               {r.licenseNumber && <CopyChip label="Licence" value={r.licenseNumber} onCopied={flash} wide />}
               <CopyChip label="FEIN" value={fein} onCopied={flash} />
             </div>
+
+            <SecretPanel row={r} onCopied={flash} />
 
             {r.notes && <p className="portalcard-note">{r.notes}</p>}
 

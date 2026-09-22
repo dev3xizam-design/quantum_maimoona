@@ -574,13 +574,20 @@ export const medusaProducts = pgTable(
 /* ------------------------------------------------------------------ */
 
 /**
- * One row per state login: where to file, which account it is, and the
- * non-secret identifiers you have to paste into the portal's form.
+ * One row per state login: where to file, which account it is, and
+ * everything you have to type at the portal's login screen.
  *
- * DELIBERATELY ABSENT: passwords, PINs, security-question answers,
- * activation codes, card and bank details. Those belong in a password
- * manager and are never written to this database, the notes column
- * included. The importer drops those columns on the floor.
+ * The password, PIN, security answers and portal codes live in
+ * `secretCipher` - one AES-256-GCM blob keyed off AUTH_SECRET, the same
+ * scheme the Medusa API keys use. They are never selected into a page,
+ * never logged, and never leave the server except through the reveal
+ * action, which decrypts one account at a time for a signed-in user who
+ * asked for it.
+ *
+ * The plaintext columns stay free of secrets: `notes` and `purpose` render
+ * on every card, so anything secret-shaped typed into them is moved into
+ * the encrypted blob instead. Card numbers, CVVs and bank logins have no
+ * field here at all.
  */
 export const portals = pgTable(
   "portals",
@@ -600,6 +607,12 @@ export const portals = pgTable(
     frequency: text("frequency"),
     /** active | blocked | needs_license | no_login */
     status: text("status").notNull().default("active"),
+    /**
+     * AES-256-GCM over a JSON object: { password, pin, securityAnswers,
+     * codes }. Null when nothing secret is saved for this account.
+     * Rotating AUTH_SECRET makes every one of these undecryptable.
+     */
+    secretCipher: text("secret_cipher"),
     notes: text("notes"),
     sortOrder: integer("sort_order").notNull().default(0),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

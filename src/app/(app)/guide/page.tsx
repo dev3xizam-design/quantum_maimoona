@@ -290,10 +290,19 @@ export default function GuidePage() {
         <H id="security">Security</H>
         <ul className="space-y-2 text-[13px] text-[var(--ink-2)]">
           <li>
-            <strong>Never put a portal password, PIN, card number, CVV or bank login in this
-            system</strong> — not in a notes field either. Those belong in a password manager. Only
-            non-secret identifiers (FEIN, account and license numbers) live here, because the
-            returns need them.
+            <strong>Portal logins live on the Portals page.</strong> The password, PIN, security
+            answers and codes for each state are encrypted with AES-256-GCM under a key derived
+            from <code>AUTH_SECRET</code>, never included in a page&rsquo;s HTML, and never
+            logged — they are decrypted one account at a time, only when you press Reveal. The
+            consequence is worth saying plainly: <strong>anyone who can sign in to Quantum can
+            reveal every state password</strong>, so the Quantum login is now as valuable as the
+            portals themselves. Rotating <code>AUTH_SECRET</code> makes all of them unreadable.
+          </li>
+          <li>
+            <strong>Never put a card number, CVV or bank login in this system</strong> — not in a
+            notes field, and not in the credential boxes either. Those belong in a password
+            manager. Anything secret-shaped typed into a plaintext field is stripped before it is
+            saved.
           </li>
           <li>
             PACT shipment rows contain customer names and addresses. They are written to the

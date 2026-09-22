@@ -6,6 +6,12 @@ import { db } from "@/db";
 import { portals } from "@/db/schema";
 import { requireSession } from "@/lib/auth";
 import { scrubSecrets } from "@/lib/scrub-secrets";
+import {
+  EMPTY,
+  packSecrets,
+  readSecrets,
+  type PortalSecrets,
+} from "@/lib/portal-secrets";
 
 const str = (fd: FormData, k: string) => {
   const v = fd.get(k);
@@ -38,15 +44,47 @@ export async function savePortal(formData: FormData) {
     updatedAt: new Date(),
   };
 
-  if (idRaw) {
-    await db.update(portals).set(values).where(eq(portals.id, Number(idRaw)));
+  // Secret boxes render empty, so an empty box means "leave it as it was",
+  // never "erase it". Clearing is deliberate, via the checkbox.
+  const id = idRaw ? Number(idRaw) : null;
+  const clear = formData.get("clearSecrets") === "on";
+  const existing: PortalSecrets = id && !clear ? await readSecrets(id) : { ...EMPTY };
+  const merged: PortalSecrets = {
+    password: str(formData, "password") ?? existing.password,
+    pin: str(formData, "pin") ?? existing.pin,
+    securityAnswers: str(formData, "securityAnswers") ?? existing.securityAnswers,
+    codes: str(formData, "codes") ?? existing.codes,
+  };
+  const withSecrets = { ...values, secretCipher: packSecrets(merged) };
+
+  if (id) {
+    await db.update(portals).set(withSecrets).where(eq(portals.id, id));
   } else {
-    await db.insert(portals).values(values).onConflictDoUpdate({
+    await db.insert(portals).values(withSecrets).onConflictDoUpdate({
       target: portals.label,
-      set: values,
+      set: withSecrets,
     });
   }
   revalidatePath("/portals");
+}
+
+/**
+ * Hands one account's credentials to the browser, and only when a signed-in
+ * user clicks Reveal on that card. Nothing here is ever logged, and the
+ * plaintext is never part of the page's own HTML - that is the whole reason
+ * this is an action rather than a field on the card.
+ */
+export async function revealSecrets(id: number): Promise<PortalSecrets> {
+  await requireSession();
+  if (!Number.isFinite(id)) throw new Error("Unknown portal.");
+  try {
+    return await readSecrets(id);
+  } catch {
+    // Almost always a blob written under a different AUTH_SECRET.
+    throw new Error(
+      "These credentials cannot be decrypted. AUTH_SECRET has changed since they were saved - re-enter them.",
+    );
+  }
 }
 
 export async function deletePortal(formData: FormData) {

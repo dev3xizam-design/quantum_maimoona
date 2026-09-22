@@ -1010,3 +1010,47 @@ test("a refreshed state loads, adds and closes codes, and a broken download is r
   const runs = await db.select().from(schema.jurisdictionRefreshRuns).where(eq(schema.jurisdictionRefreshRuns.state, "RI"));
   assert.deepEqual(runs.map((r) => r.status), ["applied", "applied", "rejected"]);
 });
+
+test("portal credentials survive a round trip and stay opaque at rest", async () => {
+  process.env.AUTH_SECRET ??= "test-secret-for-portal-credentials";
+  const { packSecrets, unpackSecrets, shapeOf, EMPTY } = await import("../src/lib/portal-secrets");
+
+  const secrets = {
+    password: "maximumvapour5557172#",
+    pin: "013135",
+    securityAnswers: "First dog? Chino\nFavourite film? Terminator",
+    codes: "",
+  };
+  const cipher = packSecrets(secrets);
+  assert.ok(cipher, "something was stored");
+  assert.ok(!cipher!.includes("5557172"), "the plaintext is not sitting in the column");
+  assert.ok(!cipher!.includes("Chino"));
+  assert.deepEqual(unpackSecrets(cipher), secrets);
+
+  // The page is handed the shape, never the values.
+  assert.deepEqual(shapeOf(cipher), {
+    password: true, pin: true, securityAnswers: true, codes: false,
+  });
+
+  // All-blank stores nothing at all rather than an encrypted empty object.
+  assert.equal(packSecrets({ ...EMPTY }), null);
+  assert.deepEqual(unpackSecrets(null), EMPTY);
+  assert.deepEqual(shapeOf(null), {
+    password: false, pin: false, securityAnswers: false, codes: false,
+  });
+});
+
+test("a credential written under a different AUTH_SECRET fails closed", async () => {
+  process.env.AUTH_SECRET = "the-original-secret-value-here";
+  const { packSecrets } = await import("../src/lib/portal-secrets");
+  const cipher = packSecrets({ password: "hunter2", pin: "", securityAnswers: "", codes: "" });
+
+  process.env.AUTH_SECRET = "a-completely-different-secret";
+  // Re-import is pointless - key() reads the env on every call.
+  const { shapeOf, unpackSecrets } = await import("../src/lib/portal-secrets");
+  assert.throws(() => unpackSecrets(cipher));
+  // shapeOf must degrade rather than take the whole page down with it.
+  assert.deepEqual(shapeOf(cipher), {
+    password: false, pin: false, securityAnswers: false, codes: false,
+  });
+});

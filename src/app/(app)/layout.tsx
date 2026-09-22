@@ -17,7 +17,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               Quantum prepares returns; a person files them. Every figure is a formula or a lookup,
               never an estimate.
             </span>
-            <span className="ml-auto">Never store portal passwords, PINs or card numbers here.</span>
+            <span className="ml-auto">Never store card numbers or bank credentials here.</span>
           </div>
         </footer>
       </div>

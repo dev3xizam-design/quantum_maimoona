@@ -3,22 +3,32 @@
  *
  *   npx tsx --conditions=react-server scripts/import-portals.ts "<path to .xlsx>"
  *
- * The tracker keeps passwords, PINs and security-question answers next to the
- * useful columns. This reads ONLY the non-secret ones -- label, frequency,
- * purpose, license number, login id, portal link, notes -- and never touches
- * the password column or the free-text columns that carry the security
- * answers. Nothing secret is read, so nothing secret can be stored.
+ * The tracker mixes two kinds of column. The identifying ones -- label,
+ * frequency, purpose, licence number, login id, portal link, notes -- are
+ * stored as plain text. The password, PIN, security answers and portal codes
+ * are encrypted into a single AES-256-GCM blob and never written anywhere
+ * else: not to a plaintext column, not to the notes, and not to this
+ * script's own output, which prints counts and never a value.
+ *
+ * Re-running replaces every field from the tracker, so hand edits made in
+ * the app are overwritten. That is the point -- the tracker is the source.
  */
 import "../src/lib/load-env";
 import ExcelJS from "exceljs";
 import { db, sql } from "../src/db";
 import { portals } from "../src/db/schema";
 import { scrubSecrets } from "../src/lib/scrub-secrets";
+import { packSecrets, type PortalSecrets } from "../src/lib/portal-secrets";
 
-/** Columns in the tracker, 1-indexed. Anything not listed is never read. */
-const COL = { label: 4, blocked: 5, frequency: 6, purpose: 7, notes: 8, license: 9, loginId: 11 };
+/** Columns in the tracker, 1-indexed. */
+const COL = {
+  label: 4, blocked: 5, frequency: 6, purpose: 7, notes: 8, license: 9,
+  loginId: 11, password: 12,
+};
 /** The link is usually col 13, but a few rows are shifted one to the right. */
 const LINK_SEARCH = [13, 14, 15, 16];
+/** Free-text columns holding PINs, security answers and portal codes. */
+const EXTRA_SEARCH = [14, 15, 16, 17];
 
 const NAMES: Record<string, string> = {
   alabama: "AL", alaska: "AK", arizona: "AZ", arkansas: "AR", california: "CA",
@@ -58,18 +68,49 @@ function cell(row: ExcelJS.Row, n: number): string {
   return String(v ?? "").replace(/\s+/g, " ").trim();
 }
 
-function linkOf(row: ExcelJS.Row): { url: string | null; stray: string | null } {
+function linkOf(row: ExcelJS.Row): { url: string | null; stray: string | null; urlCol: number } {
   let stray: string | null = null;
   for (const n of LINK_SEARCH) {
     const c = row.getCell(n);
     const href = typeof c.hyperlink === "string" ? c.hyperlink : null;
     const text = cell(row, n);
     const url = href && /^https?:/i.test(href) ? href : /^https?:/i.test(text) ? text : null;
-    if (url) return { url, stray };
+    if (url) return { url, stray, urlCol: n };
     // Column 13 holding something that is not a link is still worth keeping.
     if (n === 13 && text && !stray) stray = text;
   }
-  return { url: null, stray };
+  return { url: null, stray, urlCol: -1 };
+}
+
+/** Status scribbles that share a column with the codes but are not secrets. */
+const NOT_A_SECRET = /^(done|0|n\/a|na|yes|no|ok|login page error|this site.*|`)$/i;
+
+/**
+ * Pulls the password, PIN, security answers and portal codes out of a row.
+ * The password has its own column; everything else is scattered across the
+ * free-text columns to the right of the link, so it is sorted by keyword and
+ * anything unrecognised is kept rather than guessed away.
+ */
+function secretsOf(row: ExcelJS.Row, urlCol: number): PortalSecrets {
+  const answers: string[] = [];
+  const codes: string[] = [];
+  const pins: string[] = [];
+
+  for (const n of EXTRA_SEARCH) {
+    if (n === urlCol) continue;
+    const text = cell(row, n);
+    if (!text || NOT_A_SECRET.test(text)) continue;
+    if (/\bpins?\b/i.test(text)) pins.push(text);
+    else if (/activation|authoriz|access\s*code|token/i.test(text)) codes.push(text);
+    else answers.push(text);
+  }
+
+  return {
+    password: cell(row, COL.password),
+    pin: pins.join("\n"),
+    securityAnswers: answers.join("\n"),
+    codes: codes.join("\n"),
+  };
 }
 
 function statusOf(f: { blocked: string; frequency: string; notes: string; loginId: string; url: string | null }) {
@@ -95,7 +136,7 @@ async function main() {
     const label = cell(row, COL.label);
     if (!label || /^state$/i.test(label)) return;
 
-    const { url, stray } = linkOf(row);
+    const { url, stray, urlCol } = linkOf(row);
     const notes = cell(row, COL.notes);
     const frequency = cell(row, COL.frequency);
 
@@ -120,6 +161,7 @@ async function main() {
       licenseNumber: cell(row, COL.license) || null,
       frequency: frequency || null,
       status: statusOf({ blocked: cell(row, COL.blocked), frequency, notes, loginId, url }),
+      secretCipher: packSecrets(secretsOf(row, urlCol)),
       notes: scrubSecrets([notes, stray, isProse ? loginRaw : ""].filter(Boolean).join(" - ")),
       sortOrder: n,
     });
@@ -141,6 +183,8 @@ async function main() {
   }, {});
   console.log(`imported ${rows.length} portal rows`, byStatus);
   console.log(`with a link: ${rows.filter((r) => r.portalUrl).length}`);
+  // Counts only - a value from this column must never reach a terminal or a log.
+  console.log(`with saved credentials: ${rows.filter((r) => r.secretCipher).length}`);
   console.log(`unmapped state: ${rows.filter((r) => r.state === "--").map((r) => r.label).join(", ") || "none"}`);
   await sql.end();
 }
