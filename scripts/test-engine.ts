@@ -1068,3 +1068,37 @@ test("a clean state reports nothing at all", async () => {
   assert.equal(g.visible.length, 0);
   assert.equal(g.hiddenCount, 0);
 });
+
+/* ------------------------------------------------------------------ */
+/* Portal directory - nothing secret may reach the database            */
+/* ------------------------------------------------------------------ */
+
+test("a pasted password is removed value and all, not just its label", async () => {
+  const { scrubSecrets } = await import("../src/lib/scrub-secrets");
+
+  // The earlier version stripped only the keyword, which left the secret
+  // sitting there on its own. That is the regression this locks out.
+  assert.equal(scrubSecrets("Password: hunter2 — card e-check only"), "card e-check only");
+  assert.equal(scrubSecrets("PIN 013135"), null);
+  assert.equal(scrubSecrets("login ok; pwd = Maximum@21; ACH credit only"), "login ok · ACH credit only");
+  assert.equal(scrubSecrets("What is your favorite animal? Dogs. Files monthly"), "Files monthly");
+  assert.equal(scrubSecrets("cvv 402"), null);
+});
+
+test("ordinary portal notes survive the scrubber untouched", async () => {
+  const { scrubSecrets } = await import("../src/lib/scrub-secrets");
+
+  assert.equal(scrubSecrets("7/05/22 - OK to log in"), "7/05/22 · OK to log in");
+  assert.equal(scrubSecrets("Line 1a = mL purchased, not sold"), "Line 1a = mL purchased, not sold");
+  assert.equal(scrubSecrets(null), null);
+  assert.equal(scrubSecrets(""), "");
+});
+
+test("a recovery question and its answer are dropped even with no keyword", async () => {
+  const { scrubSecrets } = await import("../src/lib/scrub-secrets");
+
+  assert.equal(scrubSecrets("What was the name of your first dog? (Chino)"), null);
+  assert.equal(scrubSecrets("Files monthly; In what city does your sibling live? Chino"), "Files monthly");
+  assert.equal(scrubSecrets("Activation Code: S5MQLL"), null);
+  assert.equal(scrubSecrets("Favorite Film: Terminator"), null);
+});

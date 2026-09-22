@@ -35,6 +35,7 @@ export type DashboardData = {
   gaps: { noCost: number; noMl: number; noSystem: number; soldSkus: number };
   pactRows: number;
   stores: { total: number; connected: number };
+  portals: { total: number; withLink: number };
   uploads: { filename: string; kind: string; rows: number; when: string }[];
   monthsWithData: number;
   monthsComputed: number;
@@ -65,7 +66,8 @@ export async function getDashboard(): Promise<DashboardData> {
   const empty: DashboardData = {
     latest: null, months: [], overdue: [], overdueCount: 0, upcoming: [],
     gaps: { noCost: 0, noMl: 0, noSystem: 0, soldSkus: 0 },
-    pactRows: 0, stores: { total: 0, connected: 0 }, uploads: [],
+    pactRows: 0, stores: { total: 0, connected: 0 }, portals: { total: 0, withLink: 0 },
+    uploads: [],
     monthsWithData: 0, monthsComputed: 0,
   };
 
@@ -95,7 +97,9 @@ export async function getDashboard(): Promise<DashboardData> {
             (SELECT count(*) FROM shipments)::int pact_rows,
             (SELECT count(*) FROM filings WHERE status <> 'filed' AND due_date < ${today})::int overdue_total,
             (SELECT count(DISTINCT period) FROM transactions)::int months_with_data,
-            (SELECT count(*) FROM monthly_snapshots)::int months_computed`),
+            (SELECT count(*) FROM monthly_snapshots)::int months_computed,
+            (SELECT count(*) FROM portals)::int portals_total,
+            (SELECT count(*) FROM portals WHERE portal_url IS NOT NULL)::int portals_linked`),
         db.select({ status: integrations.status }).from(integrations),
         db.select().from(uploads).orderBy(desc(uploads.createdAt)).limit(4),
       ]);
@@ -126,6 +130,10 @@ export async function getDashboard(): Promise<DashboardData> {
       stores: {
         total: storeRows.length,
         connected: storeRows.filter((s) => s.status === "ok").length,
+      },
+      portals: {
+        total: Number(misc.portals_total ?? 0),
+        withLink: Number(misc.portals_linked ?? 0),
       },
       uploads: uploadRows.map((u) => ({
         filename: u.filename,

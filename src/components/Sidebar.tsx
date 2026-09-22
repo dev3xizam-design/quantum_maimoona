@@ -12,6 +12,7 @@ import {
   IconCalendar,
   IconDashboard,
   IconConfig,
+  IconPortals,
   IconGuide,
   IconMonths,
   IconProducts,
@@ -44,6 +45,7 @@ const GROUPS: {
   {
     label: "Setup",
     links: [
+      { href: "/portals", label: "Portals", icon: IconPortals },
       { href: "/config", label: "Config", icon: IconConfig },
       { href: "/audit", label: "Audit", icon: IconAudit },
       { href: "/guide", label: "Guide", icon: IconGuide },

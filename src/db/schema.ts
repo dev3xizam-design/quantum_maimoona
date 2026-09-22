@@ -568,3 +568,41 @@ export const medusaProducts = pgTable(
     index("medusa_matched_idx").on(t.matchedSku),
   ],
 );
+
+/* ------------------------------------------------------------------ */
+/* State portal directory                                              */
+/* ------------------------------------------------------------------ */
+
+/**
+ * One row per state login: where to file, which account it is, and the
+ * non-secret identifiers you have to paste into the portal's form.
+ *
+ * DELIBERATELY ABSENT: passwords, PINs, security-question answers,
+ * activation codes, card and bank details. Those belong in a password
+ * manager and are never written to this database, the notes column
+ * included. The importer drops those columns on the floor.
+ */
+export const portals = pgTable(
+  "portals",
+  {
+    id: serial("id").primaryKey(),
+    /** 2-letter code, or "--" when the row is not a single state. */
+    state: text("state").notNull(),
+    /** The account's own name, e.g. "Kentucky - file-only SER". Unique. */
+    label: text("label").notNull(),
+    /** What gets filed here, e.g. "Sales & Use Tax / PACT Act". */
+    purpose: text("purpose"),
+    portalUrl: text("portal_url"),
+    /** Username / customer ID typed at the login screen. Not a password. */
+    loginId: text("login_id"),
+    licenseNumber: text("license_number"),
+    /** As written on the account: M, Q, A, or a phrase. */
+    frequency: text("frequency"),
+    /** active | blocked | needs_license | no_login */
+    status: text("status").notNull().default("active"),
+    notes: text("notes"),
+    sortOrder: integer("sort_order").notNull().default(0),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("portal_label_idx").on(t.label), index("portal_state_idx").on(t.state)],
+);

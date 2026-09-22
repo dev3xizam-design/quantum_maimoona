@@ -9,6 +9,7 @@ import {
   IconConfig,
   IconGuide,
   IconMonths,
+  IconPortals,
   IconProducts,
   IconReturns,
   IconUpload,
@@ -243,12 +244,20 @@ export default async function DashboardPage() {
             delay={200}
           />
           <QuickLink
+            href="/portals"
+            title="Portals"
+            sub={`${d.portals.withLink} state logins, one click away`}
+            tone="teal"
+            icon={<IconPortals />}
+            delay={250}
+          />
+          <QuickLink
             href="/config/stores"
             title="Stores"
             sub={`${d.stores.connected} of ${d.stores.total} connected`}
             tone="violet"
             icon={<IconConfig />}
-            delay={250}
+            delay={300}
           />
           <QuickLink
             href="/config"
@@ -256,7 +265,7 @@ export default async function DashboardPage() {
             sub="Editable, effective-dated"
             tone="green"
             icon={<IconConfig />}
-            delay={300}
+            delay={350}
           />
           <QuickLink
             href="/guide"
@@ -264,7 +273,7 @@ export default async function DashboardPage() {
             sub="How the whole system works"
             tone="blue"
             icon={<IconGuide />}
-            delay={350}
+            delay={400}
           />
         </div>
       </section>
