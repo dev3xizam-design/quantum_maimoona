@@ -79,10 +79,18 @@ export async function revealSecrets(id: number): Promise<PortalSecrets> {
   if (!Number.isFinite(id)) throw new Error("Unknown portal.");
   try {
     return await readSecrets(id);
-  } catch {
-    // Almost always a blob written under a different AUTH_SECRET.
+  } catch (e) {
+    // Two different faults look identical from here, and the fix differs:
+    // a key this environment cannot use at all, versus a blob written
+    // under a previous one. Say which.
+    const why = e instanceof Error ? e.message : "";
+    if (/AUTH_SECRET/i.test(why)) {
+      throw new Error(
+        "This environment has no usable AUTH_SECRET (it must be at least 16 characters). Set it and redeploy.",
+      );
+    }
     throw new Error(
-      "These credentials cannot be decrypted. AUTH_SECRET has changed since they were saved - re-enter them.",
+      "These credentials cannot be decrypted - AUTH_SECRET has changed since they were saved. Re-enter them.",
     );
   }
 }
