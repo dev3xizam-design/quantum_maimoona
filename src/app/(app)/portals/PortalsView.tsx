@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { deletePortal, revealSecrets, savePortal } from "@/app/actions/portals";
+import { type Freq, FREQ_LABEL } from "@/lib/filing-frequency";
 import type { PortalSecrets } from "@/lib/portal-secrets";
 import { stateName } from "@/lib/states";
 
@@ -20,21 +21,49 @@ export type PortalRow = {
   portalUrl: string | null;
   loginId: string | null;
   licenseNumber: string | null;
+  /** The tracker's own wording, kept as written. */
   frequency: string | null;
+  /** That wording read into buckets. An account can be in more than one. */
+  freqs: Freq[];
+  /** True when the schedule came from the rule tables, not this account. */
+  freqInferred: boolean;
   status: string;
   notes: string | null;
   /** What is stored, not what it is. Values arrive only on Reveal. */
   secrets: SecretShape;
 };
 
+/**
+ * Filing schedule first, because that is the question this page gets asked:
+ * it is the 20th, which portals do I have to log into. "Needs attention"
+ * keeps the blocked and unlicensed accounts one click away rather than
+ * scattering them through the schedule tabs.
+ */
 const TABS = [
   { key: "all", label: "All" },
-  { key: "active", label: "Ready to file" },
-  { key: "blocked", label: "Blocked" },
-  { key: "needs_license", label: "Needs licence" },
+  { key: "monthly", label: "Monthly" },
+  { key: "quarterly", label: "Quarterly" },
+  { key: "annual", label: "Annual" },
+  { key: "none", label: "No schedule" },
+  { key: "attention", label: "Needs attention" },
 ] as const;
 
 type TabKey = (typeof TABS)[number]["key"];
+
+const NEEDS_ATTENTION = new Set(["blocked", "needs_license"]);
+
+function inTab(r: PortalRow, tab: TabKey): boolean {
+  switch (tab) {
+    case "all":
+      return true;
+    case "attention":
+      return NEEDS_ATTENTION.has(r.status);
+    case "none":
+      return r.freqs.length === 0;
+    default:
+      return r.freqs.includes(tab as Freq);
+  }
+}
 
 const STATUS_LABEL: Record<string, string> = {
   active: "Active",
@@ -329,17 +358,29 @@ export function PortalsView({ rows, fein }: { rows: PortalRow[]; fein: string })
   }
 
   const counts = useMemo(() => {
-    const c: Record<string, number> = { all: rows.length, active: 0, blocked: 0, needs_license: 0 };
-    for (const r of rows) if (r.status in c) c[r.status] += 1;
+    const c = {} as Record<TabKey, number>;
+    for (const t of TABS) c[t.key] = rows.filter((r) => inTab(r, t.key)).length;
     return c;
   }, [rows]);
 
   const shown = useMemo(() => {
     const needle = q.trim().toLowerCase();
     return rows.filter((r) => {
-      if (tab !== "all" && r.status !== tab) return false;
+      if (!inTab(r, tab)) return false;
       if (!needle) return true;
-      return [r.state, stateName(r.state), r.label, r.loginId, r.licenseNumber, r.purpose, r.notes]
+      // Status and schedule are searchable too, so "blocked" or "quarterly"
+      // finds them from the one box without hunting for the right tab.
+      return [
+        r.state,
+        stateName(r.state),
+        r.label,
+        r.loginId,
+        r.licenseNumber,
+        r.purpose,
+        r.notes,
+        STATUS_LABEL[r.status],
+        ...r.freqs.map((f) => FREQ_LABEL[f]),
+      ]
         .filter(Boolean)
         .some((v) => String(v).toLowerCase().includes(needle));
     });
@@ -354,8 +395,9 @@ export function PortalsView({ rows, fein }: { rows: PortalRow[]; fein: string })
           <div>
             <h1 className="page-title">Portals</h1>
             <p className="page-sub mt-0.5">
-              Every state login in one place. Click any chip to copy it, then open the portal and
-              paste. {rows.length} accounts, {rows.filter((r) => r.portalUrl).length} with a link.
+              Every state login in one place, grouped by how often it has to be filed. Click any
+              chip to copy it, then open the portal and paste. {rows.length} accounts,{" "}
+              {rows.filter((r) => r.portalUrl).length} with a link.
             </p>
           </div>
           <div className="pagehead-actions">
@@ -392,7 +434,7 @@ export function PortalsView({ rows, fein }: { rows: PortalRow[]; fein: string })
               onClick={() => setTab(t.key)}
             >
               {t.label}
-              <span className="tab-count" data-tone={t.key === "blocked" ? "warn" : undefined}>
+              <span className="tab-count" data-tone={t.key === "attention" ? "warn" : undefined}>
                 {counts[t.key] ?? 0}
               </span>
             </button>
