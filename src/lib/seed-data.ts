@@ -7,6 +7,11 @@
  */
 
 export const DEFAULT_EFFECTIVE_FROM = "2026-01-01";
+/**
+ * PACT starts a month earlier than the tax configs: the Suorin USA shipment
+ * history begins with December 2025 (reported by 10 January 2026).
+ */
+export const PACT_EFFECTIVE_FROM = "2025-12-01";
 
 export type SalesSeed = {
   state: string;

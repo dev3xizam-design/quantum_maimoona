@@ -14,6 +14,7 @@
 import { round2 } from "../money";
 import { periodLabel, dueDate, isoDate } from "../periods";
 import { parseMlFromDescription } from "../ingest/avalara";
+import { classifyProduct } from "../products/classify";
 import type { PactResult, PactRow, TxRow } from "./types";
 
 export type ShipmentRow = {
@@ -65,6 +66,9 @@ export function computePact(opts: {
     for (const r of opts.rows) {
       if ((r.jurisdictionType ?? "").trim().toLowerCase() !== "state") continue;
       if (/return/i.test(r.docType ?? "")) continue;
+      // Route / package protection and shipping fees are lines on the invoice,
+      // not products shipped - a state whose only line was one owes no report.
+      if (classifyProduct(r.itemDescription, r.itemCode).isNonProduct) continue;
       const key = `${r.documentId}|${r.lineNo}|${r.itemCode ?? ""}`;
       if (seen.has(key)) continue;
       seen.add(key);

@@ -707,6 +707,40 @@ test("PACT prefers the order feed over the sales export", async () => {
   );
 });
 
+test("a month with shipments but no Avalara export still owes, and gets, its PACT report", async () => {
+  const { db } = await import("../src/db");
+  const { and, eq } = await import("drizzle-orm");
+  const { computePeriodEverything } = await import("../src/lib/period");
+  const { insertShipments } = await import("../src/lib/ingest/persist");
+
+  // A month nobody has uploaded a sales export for.
+  const month = "2026-11";
+  const [up] = await db
+    .insert(schema.uploads)
+    .values({ filename: "orders.xlsx", kind: "shipments", status: "complete" })
+    .returning({ id: schema.uploads.id });
+  await insertShipments(up.id, [
+    {
+      period: month, state: "OH", externalId: "shopify:t:#9:1", customerName: "Pat Lee",
+      shipToAddress: "1 Main St", shipToCity: "Akron", shipToState: "OH", shipToZip: "44301",
+      invoiceDate: `${month}-03`, invoiceNumber: "#9", product: "Suorin Air", quantity: 2,
+    },
+  ]);
+
+  const comp = await computePeriodEverything(month, { persist: true });
+  const oh = comp.bundles.find((b) => b.state === "OH")!;
+  assert.equal(oh.hasActivity, true, "shipments alone make the state active");
+  assert.equal(oh.pact?.shipmentCount, 1);
+  assert.equal(oh.sales, null, "no $0 sales return is handed to the downloads");
+  assert.equal(oh.excise, null);
+
+  const rows = await db
+    .select()
+    .from(schema.filings)
+    .where(and(eq(schema.filings.state, "OH"), eq(schema.filings.period, month)));
+  assert.deepEqual(rows.map((r) => r.taxType), ["pact"], "only the PACT filing is written");
+});
+
 test("many stores can be connected, each keeping its own catalog and orders", async () => {
   const { db } = await import("../src/db");
   const { eq } = await import("drizzle-orm");

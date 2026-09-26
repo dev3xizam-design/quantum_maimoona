@@ -1102,3 +1102,65 @@ test("a recovery question and its answer are dropped even with no keyword", asyn
   assert.equal(scrubSecrets("Activation Code: S5MQLL"), null);
   assert.equal(scrubSecrets("Favorite Film: Terminator"), null);
 });
+
+test("a Matrixify Orders export becomes PACT rows: names joined, add-ons dropped, bottle mL from the size tag", async () => {
+  const { parseShopifyOrders } = await import("../src/lib/ingest/shopify");
+  const headers = [
+    "Name", "Created At", "Customer: First Name", "Customer: Last Name", "Shipping: Address 1",
+    "Shipping: Address 2", "Shipping: Zip", "Shipping: City", "Shipping: Province",
+    "Line: Quantity", "Line: Vendor", "Line: Product Tags", "Line: Variant Cost", "Line: Variant Price",
+  ];
+  const order = {
+    Name: "#1001", "Created At": "2026-08-01 05:52:25 -0800", "Customer: First Name": "Pat",
+    "Customer: Last Name": "Lee", "Shipping: Address 1": "1 Main St", "Shipping: Address 2": "",
+    "Shipping: Zip": "71373", "Shipping: City": "Vidalia", "Shipping: Province": "Louisiana",
+  };
+  const line = (q: string, vendor: string, tags = "") => ({
+    ...order, "Line: Quantity": q, "Line: Vendor": vendor, "Line: Product Tags": tags,
+  });
+  const r = parseShopifyOrders(
+    [
+      line("1", "MV DYNAMIC", "self-insurance, self-insurance-api"),
+      line("2", "DripFire", "60, San Francisco Ban, state-restricted"),
+      line("3", "Suorin", "Suorin Air"),
+      line("1", "RedHawkVapes", "10, San Francisco Ban, state-restricted"),
+      line("1", "Route", "San Francisco Ban"),
+      line("", ""), // Matrixify pads each order with blank rows
+      { ...line("1", "Suorin"), "Shipping: Province": "Ontario" },
+    ],
+    headers,
+    "Suorin USA",
+  );
+  assert.equal(r.rows.length, 3);
+  assert.equal(r.skippedNonProduct, 2);
+  assert.equal(r.skippedNoState, 1);
+  assert.equal(r.rows[0].customerName, "Pat Lee");
+  assert.equal(r.rows[0].state, "LA");
+  assert.equal(r.rows[0].period, "2026-08");
+  assert.equal(r.rows[0].brand, "DripFire");
+  assert.equal(r.rows[0].product, "DripFire 60 mL e-liquid");
+  assert.equal(r.rows[0].mlTotal, 120);
+  assert.equal(r.rows[1].product, "Suorin Air");
+  assert.equal(r.rows[1].mlTotal, 0);
+  // RedHawk's "10" sits on disposables and pod packs - not a bottle size.
+  assert.equal(r.rows[2].mlTotal, 0);
+  assert.deepEqual(r.rows.map((x) => x.externalId), [
+    "shopify:Suorin USA:#1001:1", "shopify:Suorin USA:#1001:2", "shopify:Suorin USA:#1001:3",
+  ]);
+});
+
+test("PACT built from the sales export leaves out shipping protection and fees", async () => {
+  const { computePact } = await import("../src/lib/engine/pact");
+  const rows = [
+    line("D1", "1", "State", { amount: 1.95 }, {
+      state: "NE", itemCode: "ROUTE", itemDescription: "SHIPPING PROTECTION BY ROUTE - $1.95",
+    }),
+    line("D1", "2", "State", { amount: 14.76 }, { state: "NE" }),
+  ];
+  const r = computePact({
+    state: "NE", period: "2026-07", shipments: [], rows, products: new Map(),
+    portal: null, formName: null, dueDay: 10,
+  });
+  assert.equal(r.shipmentCount, 1, "the bottle is reported, the Route fee is not");
+  assert.equal(r.rows[0].product, "30ML Bottle");
+});

@@ -340,7 +340,10 @@ function pactDetailSheet(wb: ExcelJS.Workbook, r: PactResult) {
       row.shipToZip ?? "",
       row.invoiceDate ?? "",
       row.invoiceNumber ?? "",
-      [row.brand, row.product].filter(Boolean).join(" - "),
+      // "Suorin Air" already names its brand; "Suorin - Suorin Air" says it twice.
+      row.brand && row.product?.toUpperCase().startsWith(row.brand.toUpperCase())
+        ? row.product
+        : [row.brand, row.product].filter(Boolean).join(" - "),
       row.quantity,
       row.ml,
       "",

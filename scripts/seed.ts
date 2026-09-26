@@ -19,6 +19,7 @@ import {
 import {
   ACCOUNT_SEED,
   DEFAULT_EFFECTIVE_FROM,
+  PACT_EFFECTIVE_FROM,
   EXCISE_SEED,
   JURISDICTION_SEED,
   NEXUS_SEED,
@@ -77,7 +78,7 @@ async function main() {
       notes:
         "Monthly, due the 10th. Applies from the FIRST interstate shipment - no economic-nexus threshold. Cigarette PA-1 sections stay blank.",
       active: true,
-      effectiveFrom: DEFAULT_EFFECTIVE_FROM,
+      effectiveFrom: PACT_EFFECTIVE_FROM,
     });
   }
   console.log(`  ${PACT_STATES.length} PACT registrations`);

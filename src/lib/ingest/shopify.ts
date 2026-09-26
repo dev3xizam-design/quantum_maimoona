@@ -7,6 +7,11 @@
  * would file a PACT report with one address and a pile of blanks, so the
  * header is carried down until the next order begins.
  *
+ * Two layouts are read. Shopify's own CSV names each line ("Lineitem name",
+ * "Lineitem sku"). A Matrixify export ("Line: Quantity", "Line: Vendor",
+ * "Line: Product Tags") carries no line name at all, so the brand comes from
+ * the vendor, the product from the tags, and a bottle's mL from its size tag.
+ *
  * Isomorphic: parsed in the browser like every other upload.
  */
 
@@ -20,10 +25,14 @@ const FIELDS: Record<string, string[]> = {
   email: ["email", "contactemail"],
   createdAt: ["createdat", "paidat", "processedat", "date"],
   financialStatus: ["financialstatus"],
-  quantity: ["lineitemquantity", "quantity", "qty"],
+  quantity: ["lineitemquantity", "linequantity", "quantity", "qty"],
   productName: ["lineitemname", "productname", "lineitemtitle"],
-  sku: ["lineitemsku", "sku"],
+  sku: ["lineitemsku", "linesku", "sku"],
+  vendor: ["lineitemvendor", "linevendor", "vendor"],
+  tags: ["lineproducttags", "lineitemproducttags"],
   shippingName: ["shippingname", "shiptoname"],
+  customerFirstName: ["customerfirstname", "shippingfirstname"],
+  customerLastName: ["customerlastname", "shippinglastname"],
   shippingAddress1: ["shippingaddress1", "shippingstreet", "shiptoaddress1", "address1"],
   shippingAddress2: ["shippingaddress2", "shiptoaddress2", "address2"],
   shippingCity: ["shippingcity", "shiptocity", "city"],
@@ -38,7 +47,38 @@ const ORDER_LEVEL = [
   "orderName", "email", "createdAt", "financialStatus", "shippingName",
   "shippingAddress1", "shippingAddress2", "shippingCity", "shippingZip",
   "shippingProvince", "shippingCountry", "billingName",
+  "customerFirstName", "customerLastName",
 ] as const;
+
+/**
+ * Lines that ride along on an order but are not a tobacco product: Shopify's
+ * package-protection add-on (vendor "MV DYNAMIC", tagged self-insurance) and
+ * Route shipping insurance. PACT reports products shipped, not fees.
+ */
+const NON_PRODUCT_VENDORS = new Set(["MV DYNAMIC", "ROUTE"]);
+const NON_PRODUCT_TAGS = /\bself-insurance\b/i;
+
+/**
+ * Bottled e-liquid brands whose leading numeric tag is the bottle size in mL
+ * ("30, San Francisco Ban" on "... - 30mL"). Checked against the catalog. Not
+ * RedHawk: its "10" and "5" tags sit on disposables and pod packs, not bottles.
+ */
+const BOTTLE_ML_VENDORS = new Set(["DRIPFIRE", "NAKED 100", "7 DAZE"]);
+
+/** Tags that describe the store, not the product. */
+const NOISE_TAGS = /^(san francisco ban|state-restricted|coming-soon|bfcm\w*|\d+(\.\d+)?)$/i;
+
+function describeFromTags(vendor: string, tags: string): { product: string | null; mlPerUnit: number } {
+  const list = tags.split(",").map((t) => t.trim()).filter(Boolean);
+  const size = list.find((t) => /^\d+(\.\d+)?$/.test(t));
+  const mlPerUnit = size && BOTTLE_ML_VENDORS.has(vendor.toUpperCase()) ? Number(size) : 0;
+  // "Suorin" + "Suorin Air" reads as "Suorin Air"; "Suorin" + "Drop2" as "Suorin Drop2".
+  const line = list.filter((t) => !NOISE_TAGS.test(t)).join(" ");
+  let product = line.toUpperCase().startsWith(vendor.toUpperCase()) ? line : `${vendor} ${line}`;
+  if (mlPerUnit) product += ` ${mlPerUnit} mL e-liquid`;
+  product = product.replace(/\s+/g, " ").trim();
+  return { product: product || null, mlPerUnit };
+}
 
 export type ShopifyShipment = {
   externalId: string;
@@ -53,7 +93,9 @@ export type ShopifyShipment = {
   invoiceDate: string | null;
   invoiceNumber: string | null;
   product: string | null;
+  brand: string | null;
   quantity: number;
+  mlTotal: number;
   sku: string | null;
 };
 
@@ -63,6 +105,7 @@ export type ShopifyParseResult = {
   skippedNoState: number;
   skippedNonUs: number;
   skippedRefunded: number;
+  skippedNonProduct: number;
   missingColumns: string[];
   periods: string[];
 };
@@ -101,7 +144,7 @@ export function parseShopifyOrders(
   if (missingColumns.length) {
     return {
       rows: [], orders: 0, skippedNoState: 0, skippedNonUs: 0, skippedRefunded: 0,
-      missingColumns, periods: [],
+      skippedNonProduct: 0, missingColumns, periods: [],
     };
   }
 
@@ -115,6 +158,7 @@ export function parseShopifyOrders(
   let skippedNoState = 0;
   let skippedNonUs = 0;
   let skippedRefunded = 0;
+  let skippedNonProduct = 0;
 
   for (const record of records) {
     // A non-empty order name starts a new order and resets the carried header.
@@ -128,6 +172,13 @@ export function parseShopifyOrders(
 
     const quantity = Number((get(record, "quantity") || "0").replace(/[^0-9.-]/g, ""));
     if (!quantity) continue;
+
+    const vendor = get(record, "vendor");
+    const tags = get(record, "tags");
+    if (NON_PRODUCT_VENDORS.has(vendor.toUpperCase()) || NON_PRODUCT_TAGS.test(tags)) {
+      skippedNonProduct += 1;
+      continue;
+    }
 
     const financial = (carried.financialStatus ?? "").toLowerCase();
     if (financial.includes("refund") || financial.includes("void")) {
@@ -157,12 +208,20 @@ export function parseShopifyOrders(
     const index = (lineCounter.get(orderName) ?? 0) + 1;
     lineCounter.set(orderName, index);
 
+    const named = get(record, "productName");
+    const fromTags = describeFromTags(vendor, tags);
+    const customer =
+      carried.shippingName ||
+      [carried.customerFirstName, carried.customerLastName].filter(Boolean).join(" ") ||
+      carried.billingName ||
+      carried.email;
+
     rows.push({
       externalId: `shopify:${storeLabel}:${orderName}:${index}`,
       orderNumber: orderName,
       period: date.slice(0, 7),
       state,
-      customerName: carried.shippingName || carried.billingName || carried.email || null,
+      customerName: customer || null,
       shipToAddress:
         [carried.shippingAddress1, carried.shippingAddress2].filter(Boolean).join(", ") || null,
       shipToCity: carried.shippingCity || null,
@@ -170,8 +229,10 @@ export function parseShopifyOrders(
       shipToZip: carried.shippingZip || null,
       invoiceDate: date,
       invoiceNumber: orderName,
-      product: get(record, "productName") || null,
+      product: named || fromTags.product,
+      brand: vendor || null,
       quantity,
+      mlTotal: named ? 0 : fromTags.mlPerUnit * quantity,
       sku: get(record, "sku") || null,
     });
   }
@@ -182,6 +243,7 @@ export function parseShopifyOrders(
     skippedNoState,
     skippedNonUs,
     skippedRefunded,
+    skippedNonProduct,
     missingColumns: [],
     periods: [...new Set(rows.map((r) => r.period))].sort(),
   };

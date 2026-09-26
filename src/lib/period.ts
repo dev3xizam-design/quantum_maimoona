@@ -41,6 +41,7 @@ export type StateBundle = {
   pactPeriod: string | null;
   account: { accountNumber: string | null; licenseNumber: string | null } | null;
   exciseAccount: { accountNumber: string | null; licenseNumber: string | null } | null;
+  /** Avalara sales rows OR PACT shipments this month - either means something to file. */
   hasActivity: boolean;
   errors: string[];
 };
@@ -198,7 +199,11 @@ export async function computePeriodEverything(
     const pactPeriod = periodFor.get(`${state}|pact`) ?? null;
 
     const rowsThisMonth = txByState.get(`${state}|${month}`) ?? [];
-    const hasActivity = rowsThisMonth.length > 0;
+    // A month can have shipments and no Avalara export (December 2025, or a month
+    // Avalara has not been pulled for yet). PACT is still owed for those states.
+    const hasSales = rowsThisMonth.length > 0;
+    const hasActivity =
+      hasSales || shipmentRows.some((sh) => sh.state === state && sh.period === month);
 
     if (salesPeriod) {
       const cfgRow = resolveSales(state, salesPeriod);
@@ -314,10 +319,14 @@ export async function computePeriodEverything(
       }
     }
 
+    // Active only because of shipments: there is nothing to put on a sales or
+    // excise return, so do not hand the downloads a $0 one.
+    const pactOnly = hasActivity && !hasSales;
+
     bundles.push({
       state,
-      sales,
-      excise,
+      sales: pactOnly ? null : sales,
+      excise: pactOnly ? null : excise,
       pact,
       salesPeriod,
       excisePeriod,

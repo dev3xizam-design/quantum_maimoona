@@ -279,6 +279,7 @@ export async function insertShipments(uploadId: number, rows: ShipmentInput[]) {
           invoiceDate: dsql`excluded.invoice_date`,
           invoiceNumber: dsql`excluded.invoice_number`,
           product: dsql`excluded.product`,
+          brand: dsql`excluded.brand`,
           quantity: dsql`excluded.quantity`,
           mlTotal: dsql`excluded.ml_total`,
         },

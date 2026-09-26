@@ -26,9 +26,20 @@ export function ShopifyUploader() {
     setMsg(null);
     setReport(null);
     try {
-      const text = await file.text();
-      const parsed = Papa.parse<Record<string, string>>(text, { header: true, skipEmptyLines: true });
-      const result = parseShopifyOrders(parsed.data, parsed.meta.fields ?? [], store.trim());
+      let records: Record<string, string>[];
+      let headers: string[];
+      if (/\.xlsx$/i.test(file.name)) {
+        const { readXlsxRecords } = await import("@/lib/ingest/xlsx-records");
+        ({ records, headers } = await readXlsxRecords(await file.arrayBuffer(), "Orders"));
+      } else {
+        const parsed = Papa.parse<Record<string, string>>(await file.text(), {
+          header: true,
+          skipEmptyLines: true,
+        });
+        records = parsed.data;
+        headers = parsed.meta.fields ?? [];
+      }
+      const result = parseShopifyOrders(records, headers, store.trim());
       setReport(result);
 
       if (result.missingColumns.length) {
@@ -53,7 +64,9 @@ export function ShopifyUploader() {
         invoiceDate: r.invoiceDate,
         invoiceNumber: r.invoiceNumber,
         product: r.product,
+        brand: r.brand,
         quantity: r.quantity,
+        mlTotal: r.mlTotal,
       }));
 
       let uploadId: number | undefined;
@@ -113,16 +126,17 @@ export function ShopifyUploader() {
           <div className="field">Export it from Shopify</div>
           <p className="text-[12px] text-[var(--muted)]">
             Shopify admin → Orders → Export → <em>All orders</em> (or a date range) → CSV for Excel.
-            The engine needs the shipping address columns, so do not trim them out.
+            The engine needs the shipping address columns, so do not trim them out. A Matrixify
+            monthly Orders export (.xlsx) works as it is.
           </p>
         </div>
 
         <div className="mt-4">
           <FileDrop
-            accept=".csv"
+            accept=".csv,.xlsx"
             disabled={busy}
             buttonLabel={busy ? "Importing…" : "Choose Shopify export"}
-            hint="orders_export.csv"
+            hint="orders_export.csv or a Matrixify Export_….xlsx"
             onFiles={(files) => handle(files[0])}
           />
         </div>
@@ -151,7 +165,9 @@ export function ShopifyUploader() {
               { label: "Months covered", value: String(report.periods.length) },
               {
                 label: "Skipped",
-                value: String(report.skippedNoState + report.skippedNonUs + report.skippedRefunded),
+                value: String(
+                  report.skippedNoState + report.skippedNonUs + report.skippedRefunded + report.skippedNonProduct,
+                ),
                 tone: report.skippedNoState > 0 ? "warn" : undefined,
               },
             ].map((t) => (
@@ -165,10 +181,16 @@ export function ShopifyUploader() {
           </div>
         )}
 
-        {report && (report.skippedNonUs > 0 || report.skippedRefunded > 0 || report.skippedNoState > 0) && (
+        {report &&
+          (report.skippedNonUs > 0 ||
+            report.skippedRefunded > 0 ||
+            report.skippedNoState > 0 ||
+            report.skippedNonProduct > 0) && (
           <div className="callout callout-note mt-3">
-            Skipped {report.skippedNonUs} non-US, {report.skippedRefunded} refunded or voided, and{" "}
-            {report.skippedNoState} with no usable ship-to state. PACT only covers interstate
+            Skipped {report.skippedNonUs} non-US, {report.skippedRefunded} refunded or voided,{" "}
+            {report.skippedNonProduct} package-protection or shipping-insurance add-ons, and{" "}
+            {report.skippedNoState} with no usable ship-to state (including territories and
+            foreign addresses when the export has no country column). PACT only covers interstate
             shipments within the US, and a line with no state cannot be reported at all — it is
             counted here rather than dropped quietly.
           </div>
