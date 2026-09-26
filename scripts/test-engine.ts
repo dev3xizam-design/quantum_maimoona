@@ -1164,3 +1164,40 @@ test("PACT built from the sales export leaves out shipping protection and fees",
   assert.equal(r.shipmentCount, 1, "the bottle is reported, the Route fee is not");
   assert.equal(r.rows[0].product, "30ML Bottle");
 });
+
+test("quarterly and annual returns are scheduled from config, with running totals and phantom-free history", async () => {
+  const { buildPeriodic } = await import("../src/lib/periodic");
+  const cfg = (state: string, frequency: string, from: string, to: string | null = null) => ({
+    state, taxType: "sales" as const, frequency, dueDay: 20, basis: "SALES" as const,
+    form: null, portal: null, effectiveFrom: from, effectiveTo: to,
+  });
+  const rows = buildPeriodic({
+    year: 2026,
+    configs: [
+      cfg("IL", "QUARTERLY", "2026-01-01"),
+      cfg("KS", "MONTHLY", "2025-01-01", "2026-01-01"),
+      cfg("KS", "ANNUAL", "2026-01-01"),
+      cfg("FL", "MONTHLY", "2026-01-01"),
+    ],
+    filings: [
+      { state: "IL", taxType: "sales", period: "2026-Q1", status: "filed", dueDate: "2026-04-20", taxComputed: 427, taxCollected: 427.09, delta: 0, amountPaid: 427, confirmationNumber: "X1", computedAt: null, warnings: [] },
+      { state: "IL", taxType: "sales", period: "2026-Q2", status: "ready", dueDate: "2026-07-20", taxComputed: 385, taxCollected: 384.73, delta: 0, amountPaid: null, confirmationNumber: null, computedAt: null, warnings: [] },
+      { state: "IL", taxType: "sales", period: "2026-Q3", status: "ready", dueDate: "2026-10-20", taxComputed: 257, taxCollected: 257, delta: 0, amountPaid: null, confirmationNumber: null, computedAt: null, warnings: [] },
+    ],
+    salesMonths: new Set(["IL|2026-07", "IL|2026-08", "KS|2026-01"]),
+    purchaseMonths: new Set(),
+    asOf: new Date("2026-09-26T12:00:00Z"),
+  });
+
+  const by = (s: string, p: string) => rows.find((r) => r.state === s && r.period === p)!;
+  assert.equal(rows.some((r) => r.state === "FL"), false, "monthly states are not listed");
+  assert.equal(rows.filter((r) => r.state === "IL").length, 4, "every quarter is owed, even with no data");
+  assert.equal(rows.filter((r) => r.state === "KS").length, 1, "Kansas gets its one annual return, no quarters");
+  assert.equal(by("IL", "2026-Q1").status, "filed");
+  assert.equal(by("IL", "2026-Q2").status, "overdue");
+  assert.equal(by("IL", "2026-Q3").status, "in_progress", "September is not over: a running total");
+  assert.deepEqual(by("IL", "2026-Q3").monthsWithData, ["2026-07", "2026-08"]);
+  assert.equal(by("IL", "2026-Q4").status, "no_data");
+  assert.equal(by("IL", "2026-Q4").dueDate, "2027-01-20");
+  assert.equal(by("KS", "2026").status, "not_computed", "data exists but no month has been run");
+});

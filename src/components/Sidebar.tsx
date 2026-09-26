@@ -15,6 +15,7 @@ import {
   IconPortals,
   IconGuide,
   IconMonths,
+  IconPeriodic,
   IconProducts,
   IconReturns,
   IconUpload,
@@ -33,6 +34,7 @@ const GROUPS: {
       { href: "/months", label: "Months", icon: IconMonths, badge: "months" },
       { href: "/calendar", label: "Calendar", icon: IconCalendar },
       { href: "/returns", label: "Returns", icon: IconReturns, badge: "overdue" },
+      { href: "/quarterly-annual", label: "Quarterly & Annual", icon: IconPeriodic },
     ],
   },
   {

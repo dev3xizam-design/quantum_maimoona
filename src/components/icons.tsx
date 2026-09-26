@@ -48,6 +48,14 @@ export const IconReturns = () => (
   </svg>
 );
 
+/** A calendar split into quarters - the returns that are not filed monthly. */
+export const IconPeriodic = () => (
+  <svg {...base}>
+    <rect x="3" y="5" width="18" height="16" rx="2" />
+    <path d="M3 10h18M8 3v4M16 3v4M12 10v11M3 15.5h18" />
+  </svg>
+);
+
 export const IconProducts = () => (
   <svg {...base}>
     <path d="M12 3 3 7.5v9L12 21l9-4.5v-9z" />
