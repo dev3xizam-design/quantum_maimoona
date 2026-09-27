@@ -5,8 +5,12 @@ import { Logo } from "@/components/Logo";
 
 export const dynamic = "force-dynamic";
 
-export default async function LoginPage() {
-  if (await getSession()) redirect("/");
+/** Only same-site paths - never an absolute URL, so ?next= cannot become an open redirect. */
+const safeNext = (n?: string) => (n && n.startsWith("/") && !n.startsWith("//") && !n.startsWith("/\\") ? n : undefined);
+
+export default async function LoginPage({ searchParams }: { searchParams: Promise<{ next?: string }> }) {
+  const next = safeNext((await searchParams).next);
+  if (await getSession()) redirect(next ?? "/");
   let firstRun = false;
   let dbError: string | null = null;
   try {
@@ -43,7 +47,7 @@ export default async function LoginPage() {
             </div>
           </div>
         ) : (
-          <LoginForm firstRun={firstRun} />
+          <LoginForm firstRun={firstRun} next={next} />
         )}
 
         <p className="mt-5 text-[11px] leading-relaxed text-[var(--muted)]">

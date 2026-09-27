@@ -19,6 +19,8 @@ import {
   IconProducts,
   IconReturns,
   IconUpload,
+  IconStores,
+  IconMarketplace,
 } from "./icons";
 
 type Badge = "overdue" | "review" | "months" | null;
@@ -41,7 +43,9 @@ const GROUPS: {
     label: "Data",
     links: [
       { href: "/upload", label: "Upload", icon: IconUpload },
+      { href: "/config/stores", label: "Stores", icon: IconStores },
       { href: "/products", label: "Products", icon: IconProducts, badge: "review" },
+      { href: "/marketplace", label: "Marketplace", icon: IconMarketplace },
     ],
   },
   {
@@ -103,7 +107,12 @@ export function Sidebar({
     });
   };
 
-  const isActive = (href: string) => (href === "/" ? pathname === "/" : pathname.startsWith(href));
+  const isActive = (href: string) =>
+    href === "/"
+      ? pathname === "/"
+      : href === "/config"
+        ? pathname.startsWith(href) && !pathname.startsWith("/config/stores")
+        : pathname.startsWith(href);
   const current = PRIMARY.find((l) => isActive(l.href))?.label ?? "Quantum";
 
   const badgeFor = (b: Badge) => {

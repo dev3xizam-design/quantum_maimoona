@@ -1088,3 +1088,109 @@ test("a credential written under a different AUTH_SECRET fails closed", async ()
     password: false, pin: false, securityAnswers: false, codes: false,
   });
 });
+
+test("a plugin store pushes orders with its key; cancelling removes them; a new key revokes the old", async () => {
+  const { db } = await import("../src/db");
+  const { eq, like } = await import("drizzle-orm");
+  const store = await import("../src/lib/connectors/store");
+  const { normalizeOrders } = await import("../src/lib/connectors/normalize");
+  const { pushBatchSchema, pushToNormalized } = await import("../src/lib/connectors/push");
+
+  const { id, key } = await store.createPushConnection({
+    name: "Woo Test", baseUrl: "https://woo.example.com", platform: "woocommerce", actor: "t@t.t",
+  });
+  assert.match(key, /^qk_live_/);
+  const [row] = await db.select().from(schema.integrations).where(eq(schema.integrations.id, id));
+  assert.notEqual(row.pushKeyHash, key, "only the hash is stored");
+  assert.equal(row.pushKeyLast4, key.slice(-4));
+
+  const conn = await store.connectionForPushKey(key);
+  assert.equal(conn?.id, id);
+  assert.equal(await store.connectionForPushKey("qk_live_wrong"), null);
+
+  const send = async (body: unknown) => {
+    const c = (await store.connectionForPushKey(key))!;
+    const batch = pushBatchSchema.parse(body);
+    return store.writeShipments(c, normalizeOrders(batch.orders.map(pushToNormalized), c.provider, c.slug));
+  };
+  const order = {
+    id: "501", number: "#501", created_at: "2026-08-12T09:00:00", status: "processing",
+    ship_to: { first_name: "Kay", last_name: "Oh", address1: "1 Rd", city: "Topeka", state: "KS", zip: "66601", country: "US" },
+    lines: [{ id: "1", name: "Pod", sku: "P", quantity: 2 }, { id: "2", name: "Tank", sku: "T", quantity: 1 }],
+  };
+  const first = await send({ orders: [order] });
+  assert.equal(first.shipmentRows, 2);
+  await send({ orders: [order] });
+  const rowsFor = () => db.select().from(schema.shipments).where(like(schema.shipments.externalId, `push:${conn!.slug}:501:%`));
+  assert.equal((await rowsFor()).length, 2, "re-sending is idempotent");
+
+  const cancelled = await send({ orders: [{ ...order, status: "cancelled" }] });
+  assert.equal(cancelled.removedCancelled, 2);
+  assert.equal((await rowsFor()).length, 0, "a cancelled order leaves the PACT feed");
+
+  const fresh = await store.issuePushKey(id);
+  assert.equal(await store.connectionForPushKey(key), null, "old key revoked");
+  assert.equal((await store.connectionForPushKey(fresh))?.id, id);
+});
+
+test("live Shopify rows replace the CSV-imported rows of the same orders, and only that store's", async () => {
+  const { db } = await import("../src/db");
+  const { and, eq } = await import("drizzle-orm");
+  const { writeShipments } = await import("../src/lib/connectors/store");
+  const { normalizeOrders } = await import("../src/lib/connectors/normalize");
+
+  const base = { period: "2026-02", state: "OK", sourceSystem: "shopify_csv", quantity: "1" };
+  await db.insert(schema.shipments).values([
+    { ...base, sourceLabel: "Suorin USA", externalId: "shopify:Suorin USA:#1001:0", orderNumber: "#1001" },
+    { ...base, sourceLabel: "Suorin USA", externalId: "shopify:Suorin USA:#1999:0", orderNumber: "#1999" },
+    { ...base, sourceLabel: "Other Shop", externalId: "shopify:Other Shop:#1001:0", orderNumber: "#1001" },
+  ]);
+  const [conn] = await db
+    .insert(schema.integrations)
+    .values({ slug: "suorin", name: "Suorin USA", provider: "shopify", baseUrl: "https://suorin.myshopify.com", status: "ok" })
+    .returning();
+
+  const result = normalizeOrders(
+    [{ id: "100", number: "#1001", createdAt: "2026-02-03T00:00:00Z", cancelled: false,
+       shipTo: { state: "OK", country: "US", address1: "x" }, lines: [{ id: "1", quantity: 1, sku: "S" }] }],
+    "shopify", conn.slug,
+  );
+  const stats = await writeShipments(conn, result);
+  assert.equal(stats.supersededCsvRows, 1);
+
+  const csvLeft = await db.select({ ext: schema.shipments.externalId }).from(schema.shipments)
+    .where(eq(schema.shipments.sourceSystem, "shopify_csv"));
+  assert.deepEqual(csvLeft.map((r) => r.ext).sort(), ["shopify:Other Shop:#1001:0", "shopify:Suorin USA:#1999:0"],
+    "orders not in the API window and other stores' rows are untouched");
+  const live = await db.select().from(schema.shipments)
+    .where(and(eq(schema.shipments.sourceSystem, "shopify"), eq(schema.shipments.integrationId, conn.id)));
+  assert.equal(live.length, 1);
+});
+
+test("a plugin pairing code works exactly once", async () => {
+  const { db } = await import("../src/db");
+  const { and, eq, sql: dsql } = await import("drizzle-orm");
+  const { createPushConnection } = await import("../src/lib/connectors/store");
+  const { signPairingCode, verifyPairingCode } = await import("../src/lib/connectors/pairing");
+
+  const { id } = await createPushConnection({ name: "Pair Test", baseUrl: "https://pair.example.com", platform: "woocommerce", actor: "t" });
+  const { code, jti } = await signPairingCode(id);
+  await db.update(schema.integrations)
+    .set({ config: dsql`coalesce(${schema.integrations.config}, '{}'::jsonb) || ${JSON.stringify({ pendingCode: jti })}::jsonb` })
+    .where(eq(schema.integrations.id, id));
+
+  // Same statement the /api/plugin/v1/pair route runs.
+  const burn = async () => {
+    const claim = await verifyPairingCode(code);
+    assert.ok(claim);
+    return db.update(schema.integrations)
+      .set({ config: dsql`${schema.integrations.config} - 'pendingCode'` })
+      .where(and(eq(schema.integrations.id, claim.integrationId), dsql`${schema.integrations.config}->>'pendingCode' = ${claim.jti}`))
+      .returning({ id: schema.integrations.id });
+  };
+  assert.equal((await burn()).length, 1);
+  assert.equal((await burn()).length, 0, "a replayed code claims nothing");
+  assert.equal(await verifyPairingCode(code + "x"), null);
+  const [row] = await db.select().from(schema.integrations).where(eq(schema.integrations.id, id));
+  assert.equal((row.config as Record<string, unknown>).platform, "woocommerce", "other config survives the burn");
+});

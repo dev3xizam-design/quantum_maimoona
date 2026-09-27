@@ -504,7 +504,8 @@ export const integrations = pgTable(
     /** Stable handle used in URLs and to key synced rows. */
     slug: text("slug").notNull(),
     name: text("name").notNull(),
-    provider: text("provider").notNull().default("medusa"), // medusa | shopify
+    /** medusa | shopify | woocommerce | wix | bigcommerce | squarespace | ecwid | magento | push */
+    provider: text("provider").notNull().default("medusa"),
     baseUrl: text("base_url").notNull(),
     secretCipher: text("secret_cipher"),
     secretLast4: text("secret_last4"),
@@ -521,10 +522,22 @@ export const integrations = pgTable(
     active: boolean("active").notNull().default(true),
     ordersSyncedAt: timestamp("orders_synced_at", { withTimezone: true }),
     orderStats: jsonb("order_stats").$type<Record<string, unknown>>(),
+    /** Non-secret, provider-specific identifiers (store hash, Wix instance id, auth mode). */
+    config: jsonb("config").$type<Record<string, unknown>>(),
+    /**
+     * For stores that PUSH orders (the Quantum plugins and the Connect API):
+     * a SHA-256 of the connection key. The key itself is shown once and never stored.
+     */
+    pushKeyHash: text("push_key_hash"),
+    pushKeyLast4: text("push_key_last4"),
+    lastPushAt: timestamp("last_push_at", { withTimezone: true }),
     updatedBy: text("updated_by"),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [uniqueIndex("integration_slug_idx").on(t.slug)],
+  (t) => [
+    uniqueIndex("integration_slug_idx").on(t.slug),
+    uniqueIndex("integration_push_key_idx").on(t.pushKeyHash),
+  ],
 );
 
 /**

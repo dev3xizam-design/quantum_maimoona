@@ -2,7 +2,8 @@
 import "../src/lib/load-env";
 import { db, sql } from "../src/db";
 import { integrations } from "../src/db/schema";
-import { syncCatalog, syncOrders } from "../src/lib/medusa/sync";
+import { syncCatalog } from "../src/lib/medusa/sync";
+import { syncStoreOrders } from "../src/lib/connectors/store";
 import { refreshProductCatalog } from "../src/lib/products/catalog";
 
 async function main() {
@@ -10,12 +11,16 @@ async function main() {
   const stores = await db.select().from(integrations);
 
   for (const s of stores) {
+    if (s.provider === "push") {
+      console.log(`${s.name}: pushes its own orders, skipping`);
+      continue;
+    }
     if (!s.secretCipher) {
       console.log(`${s.name}: no key saved, skipping`);
       continue;
     }
     try {
-      if (what === "catalog" || what === "all") {
+      if ((what === "catalog" || what === "all") && s.provider === "medusa") {
         const r = await syncCatalog(s.id);
         console.log(
           `${s.name}: ${r.variants} variants · ${r.registered} registered as products · ` +
@@ -23,7 +28,7 @@ async function main() {
         );
       }
       if (what === "orders" || what === "all") {
-        const o = await syncOrders(s.id);
+        const o = await syncStoreOrders(s.id);
         console.log(
           `${s.name}: ${o.ordersRead} orders → ${o.shipmentRows} shipment lines, ` +
             `${o.states} states, ${o.withCustomerName} with a name` +

@@ -13,7 +13,8 @@ export async function login(_prev: unknown, formData: FormData) {
   const session = await verifyLogin(email, password);
   if (!session) return { error: "Incorrect email or password." };
   await createSession(session);
-  redirect("/");
+  const next = String(formData.get("next") ?? "");
+  redirect(next.startsWith("/") && !next.startsWith("//") && !next.startsWith("/\\") ? next : "/");
 }
 
 /** First-run only: creates the initial admin when no user exists yet. */

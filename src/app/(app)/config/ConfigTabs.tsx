@@ -10,7 +10,7 @@ const TABS = [
   { href: "/config/directory", label: "US directory" },
   { href: "/config/accounts", label: "Accounts" },
   { href: "/config/nexus", label: "Nexus thresholds" },
-  { href: "/config/stores", label: "Stores & Medusa" },
+  { href: "/config/stores", label: "Stores" },
 ];
 
 export function ConfigTabs() {

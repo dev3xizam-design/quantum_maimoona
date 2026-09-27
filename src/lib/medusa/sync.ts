@@ -39,6 +39,9 @@ export function slugify(raw: string): string {
 export type ConnectionView = {
   id: number;
   slug: string;
+  provider: string;
+  pushKeyLast4: string | null;
+  lastPushAt: string | null;
   name: string;
   baseUrl: string;
   secretLast4: string | null;
@@ -64,6 +67,9 @@ export async function listConnections(): Promise<ConnectionView[]> {
   return rows.map((r) => ({
     id: r.id,
     slug: r.slug,
+    provider: r.provider,
+    pushKeyLast4: r.pushKeyLast4,
+    lastPushAt: fmt(r.lastPushAt),
     name: r.name,
     baseUrl: r.baseUrl,
     secretLast4: r.secretLast4,
@@ -459,7 +465,7 @@ export async function syncOrders(
   return stats;
 }
 
-async function millilitresBySku(): Promise<Map<string, number>> {
+export async function millilitresBySku(): Promise<Map<string, number>> {
   const rows = await db
     .select({ sku: products.sku, ml: products.liquidMl })
     .from(products)
@@ -472,12 +478,14 @@ async function millilitresBySku(): Promise<Map<string, number>> {
   return map;
 }
 
-/** Every active store that is set to contribute orders. */
+/** Every active MEDUSA store that is set to contribute orders (other platforms: connectors/store.ts). */
 export async function syncAllOrders(): Promise<OrderSyncResult[]> {
   const rows = await db
     .select({ id: integrations.id })
     .from(integrations)
-    .where(and(eq(integrations.active, true), eq(integrations.syncOrders, true)));
+    .where(
+      and(eq(integrations.active, true), eq(integrations.syncOrders, true), eq(integrations.provider, "medusa")),
+    );
   const out: OrderSyncResult[] = [];
   for (const r of rows) out.push(await syncOrders(r.id));
   return out;

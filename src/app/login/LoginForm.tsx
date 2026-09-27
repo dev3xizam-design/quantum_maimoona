@@ -3,12 +3,13 @@
 import { useActionState } from "react";
 import { bootstrapUser, login } from "@/app/actions/auth";
 
-export function LoginForm({ firstRun }: { firstRun: boolean }) {
+export function LoginForm({ firstRun, next }: { firstRun: boolean; next?: string }) {
   const action = firstRun ? bootstrapUser : login;
   const [state, formAction, pending] = useActionState(action, null as { error?: string } | null);
 
   return (
     <form action={formAction} className="panel space-y-4 p-5">
+      {next && <input type="hidden" name="next" value={next} />}
       <div>
         <h1 className="text-[15px] font-semibold">
           {firstRun ? "Create the first account" : "Sign in"}

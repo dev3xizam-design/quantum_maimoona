@@ -110,3 +110,17 @@ export const IconPortals = () => (
     <path d="M19 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h6" />
   </svg>
 );
+
+export const IconStores = () => (
+  <svg {...base}>
+    <path d="M4 9.5 5.5 4h13L20 9.5" />
+    <path d="M4 9.5c0 1.4 1.1 2.5 2.5 2.5S9 10.9 9 9.5c0 1.4 1.1 2.5 2.5 2.5h1c1.4 0 2.5-1.1 2.5-2.5 0 1.4 1.1 2.5 2.5 2.5S20 10.9 20 9.5" />
+    <path d="M5.5 12v8h13v-8M10 20v-4.5h4V20" />
+  </svg>
+);
+
+export const IconMarketplace = () => (
+  <svg {...base}>
+    <path d="M9 3h6v4.2a2 2 0 1 0 0 3.6V15h-4.2a2 2 0 1 0-3.6 0H3V9h4.2a2 2 0 1 1 3.6 0H9Z" transform="translate(3 3)" />
+  </svg>
+);

@@ -2,6 +2,7 @@ import { db } from "@/db";
 import { sql as dsql } from "drizzle-orm";
 import { listConnections } from "@/lib/medusa/sync";
 import { StoresPanel } from "./StoresPanel";
+import { oauthReadiness } from "@/lib/connectors/oauth";
 import type { MatchRow } from "./MatchReview";
 
 export const dynamic = "force-dynamic";
@@ -10,7 +11,12 @@ export const metadata = { title: "Stores" };
 const rowsOf = (r: unknown) =>
   (Array.isArray(r) ? r : (r as { rows: Record<string, unknown>[] }).rows) as Record<string, unknown>[];
 
-export default async function StoresPage() {
+export default async function StoresPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ connected?: string; connect_error?: string; provider?: string }>;
+}) {
+  const sp = await searchParams;
   const connections = await listConnections();
 
   let nameMatches: MatchRow[] = [];
@@ -56,6 +62,10 @@ export default async function StoresPage() {
   return (
     <StoresPanel
       connections={connections}
+      ready={oauthReadiness()}
+      connectedId={sp.connected ? Number(sp.connected) : null}
+      connectError={sp.connect_error ?? null}
+      errorProvider={sp.connect_error ? (sp.provider ?? null) : null}
       nameMatches={nameMatches}
       shipmentSummary={shipmentSummary}
     />
