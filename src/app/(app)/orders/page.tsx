@@ -191,24 +191,27 @@ export default async function OrdersPage({
       </div>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <div className="stat">
+        <div className="stat stat-sand h-[108px] flex flex-col justify-between">
           <div className="stat-label">Orders</div>
           <div className="stat-value">{total.toLocaleString()}</div>
+          <div className="stat-sub text-[11px] text-[var(--muted)]">across connected stores</div>
         </div>
-        <div className="stat">
+        <div className="stat stat-sand h-[108px] flex flex-col justify-between">
           <div className="stat-label">Order totals</div>
           <div className="stat-value">{fmtMoney(Number(totals.gross))}</div>
+          <div className="stat-sub text-[11px] text-[var(--muted)]">gross checkout value</div>
         </div>
-        <div className="stat">
-          <div className="stat-label">Tax the stores collected</div>
+        <div className="stat stat-sand h-[108px] flex flex-col justify-between">
+          <div className="stat-label">Tax collected</div>
           <div className="stat-value">{fmtMoney(Number(totals.collected))}</div>
+          <div className="stat-sub text-[11px] text-[var(--muted)]">charged at checkout</div>
         </div>
-        <div className="stat">
-          <div className="stat-label">Quantum tax (shipped, committed)</div>
+        <div className="stat stat-sand h-[108px] flex flex-col justify-between">
+          <div className="stat-label">Quantum tax</div>
           <div className="stat-value">
             {fmtMoney(Number(totals.quantumSales) + Number(totals.quantumExcise))}
           </div>
-          <div className="stat-sub">
+          <div className="stat-sub text-[11px] text-[var(--muted)] truncate">
             sales {fmtMoney(Number(totals.quantumSales))} · excise {fmtMoney(Number(totals.quantumExcise))}
           </div>
         </div>

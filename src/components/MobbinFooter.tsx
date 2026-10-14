@@ -13,8 +13,16 @@ export function MobbinFooter() {
       if (!footerRef.current) return;
       const rect = footerRef.current.getBoundingClientRect();
       const windowHeight = window.innerHeight;
+      const docHeight = document.documentElement.scrollHeight;
+      const maxScroll = docHeight - windowHeight;
 
-      // Start calculating earlier and spread across a wider distance for a much slower, gradual reveal
+      // On short pages (no scrollbar or <= 140px scroll) or if footer is already within screen view:
+      if (maxScroll <= 140 || rect.top <= windowHeight * 0.95) {
+        setRevealProgress(1);
+        return;
+      }
+
+      // On scrollable pages, calculate gradual reveal
       const startPoint = windowHeight * 1.25;
       const endPoint = windowHeight - rect.height - 80;
       const totalDistance = Math.max(startPoint - endPoint, 350);
@@ -28,11 +36,13 @@ export function MobbinFooter() {
       }
     };
 
+    // Staggered trigger on page open so the glide-up animation plays smoothly
+    const timer = setTimeout(handleScroll, 80);
     window.addEventListener("scroll", handleScroll, { passive: true });
     window.addEventListener("resize", handleScroll, { passive: true });
-    handleScroll();
 
     return () => {
+      clearTimeout(timer);
       window.removeEventListener("scroll", handleScroll);
       window.removeEventListener("resize", handleScroll);
     };

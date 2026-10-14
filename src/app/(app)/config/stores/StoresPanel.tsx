@@ -21,6 +21,7 @@ import {
   testStore,
 } from "@/app/actions/connectors";
 import { platform, providerLabel } from "@/lib/connectors/catalog";
+import { BrandLogo } from "@/components/BrandLogo";
 
 function StoreForm({ store, onDone }: { store?: ConnectionView; onDone?: () => void }) {
   const [state, formAction, saving] = useActionState(
@@ -210,12 +211,7 @@ export function StoresPanel({
                   style={{ borderColor: c.id === connectedId ? "var(--green)" : "var(--line)" }}
                 >
                   <div className="flex flex-wrap items-center gap-3">
-                    <span
-                      className="tile-icon shrink-0 font-bold text-white"
-                      style={{ background: p?.color ?? "#555", fontSize: (p?.monogram.length ?? 0) > 2 ? 10 : 13 }}
-                    >
-                      {p?.monogram ?? "?"}
-                    </span>
+                    <BrandLogo brand={c.provider} size={36} />
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="text-[13.5px] font-semibold">{c.name}</span>

@@ -4,6 +4,7 @@ import { useActionState, useState } from "react";
 import Link from "next/link";
 import { connectWithKeys, createApiConnection } from "@/app/actions/connectors";
 import { PLATFORMS, type Field, type Platform } from "@/lib/connectors/catalog";
+import { BrandLogo } from "@/components/BrandLogo";
 
 /**
  * "Connect a store": one tile per platform. Where the platform supports it the
@@ -12,14 +13,7 @@ import { PLATFORMS, type Field, type Platform } from "@/lib/connectors/catalog";
  */
 
 function Monogram({ p, size = 34 }: { p: Platform; size?: number }) {
-  return (
-    <span
-      className="tile-icon shrink-0 font-bold text-white"
-      style={{ background: p.color, width: size, height: size, fontSize: p.monogram.length > 2 ? 10 : 13 }}
-    >
-      {p.monogram}
-    </span>
-  );
+  return <BrandLogo brand={p.id} size={size} />;
 }
 
 function Input({ f }: { f: Field }) {

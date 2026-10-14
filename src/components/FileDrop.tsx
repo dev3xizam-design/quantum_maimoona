@@ -78,6 +78,8 @@ export function FileDrop({
           accept={accept}
           multiple={multiple}
           disabled={disabled}
+          className="hidden"
+          style={{ display: "none" }}
           onChange={(e) => take(e.target.files)}
         />
       </div>

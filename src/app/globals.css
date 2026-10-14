@@ -13,9 +13,9 @@
  *  - Footer: Mobbin-style massive watermark reveal on scroll
  * ------------------------------------------------------------------ */
 :root {
-  --red-pop: #9e0d1b;
-  --red-pop-hover: #b81324;
-  --red-pop-glow: rgba(158, 13, 27, 0.35);
+  --red-pop: #4c050c;
+  --red-pop-hover: #630811;
+  --red-pop-glow: rgba(76, 5, 12, 0.25);
 
   --merlot: #4c050c;
   --merlot-dark: #260205;
@@ -514,15 +514,18 @@ table.qtable tbody tr.flagged td { background: var(--q-50); }
 .btn:active { transform: translateY(1px); }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-/* The Popping Red Button */
+/* The Merlot Brand Button */
 .btn-primary {
-  background: linear-gradient(180deg, #9e0d1b 0%, #7e0a15 100%);
-  border: 1px solid #66050e; color: #ffffff;
-  box-shadow: 0 4px 14px var(--red-pop-glow);
+  background: #4c050c;
+  border: 1px solid #360308;
+  color: #ffffff !important;
+  box-shadow: 0 3px 12px rgba(76, 5, 12, 0.22);
 }
 .btn-primary:hover {
-  background: linear-gradient(180deg, #b51222 0%, #8c0b18 100%);
-  box-shadow: 0 6px 20px rgba(158, 13, 27, 0.45);
+  background: #630811;
+  color: #ffffff !important;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(76, 5, 12, 0.32);
 }
 
 .btn-pill-outline {
@@ -538,8 +541,58 @@ table.qtable tbody tr.flagged td { background: var(--q-50); }
 .btn-sm { padding: 6px 14px; font-size: 12px; }
 .btn-ghost { border-color: transparent; background: transparent; }
 .btn-ghost:hover { background: rgba(26, 9, 5, 0.06); }
-.btn-danger { border-color: var(--danger-line); color: #fff; background: var(--red-pop); }
-.btn-danger:hover { background: #b51222; }
+.btn-danger { border-color: #360308; color: #fff; background: #4c050c; }
+.btn-danger:hover { background: #630811; }
+
+/* Modern Upload Dropzone */
+.dropzone {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 22px 24px;
+  background-color: #faf7f0;
+  border: 2px dashed rgba(76, 5, 12, 0.22);
+  border-radius: 16px;
+  cursor: pointer;
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.dropzone:hover, .dropzone[data-dragging="true"] {
+  border-color: #4c050c;
+  background-color: #ffffff;
+  box-shadow: 0 6px 20px rgba(76, 5, 12, 0.08);
+  transform: translateY(-1px);
+}
+.dropzone-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: rgba(76, 5, 12, 0.08);
+  color: #4c050c;
+  flex-shrink: 0;
+  transition: transform 0.2s ease, background 0.2s ease;
+}
+.dropzone:hover .dropzone-icon {
+  transform: scale(1.08);
+  background: #4c050c;
+  color: #ffffff;
+}
+.filechip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background-color: #eae5d8;
+  color: #1a0905;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid rgba(76, 5, 12, 0.15);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
 
 @layer base {
   input[type="text"], input[type="password"], input[type="email"], input[type="number"],

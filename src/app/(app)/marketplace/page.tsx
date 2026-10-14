@@ -3,6 +3,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { platform } from "@/lib/connectors/catalog";
 import { statusOf } from "@/lib/marketplace-status";
 import { MARKETPLACE, type MarketplaceItem } from "@/lib/marketplace";
+import { BrandLogo } from "@/components/BrandLogo";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Marketplace" };
@@ -51,17 +52,11 @@ export default function MarketplacePage() {
 }
 
 function Card({ m }: { m: MarketplaceItem }) {
-  const p = platform(m.platformId);
   const s = statusOf(m);
   return (
     <Link href={`/marketplace/${m.slug}`} className="tile" style={m.status !== "available" ? { opacity: 0.72 } : undefined}>
       <div className="flex items-start gap-3">
-        <span
-          className="tile-icon shrink-0 font-bold text-white"
-          style={{ background: p?.color ?? "#555", width: 42, height: 42, borderRadius: 12, fontSize: (p?.monogram.length ?? 0) > 2 ? 11 : 15 }}
-        >
-          {p?.monogram ?? "Q"}
-        </span>
+        <BrandLogo brand={m.platformId} size={42} />
         <div className="min-w-0">
           <div className="tile-title leading-snug">{m.name}</div>
           <div className="tile-sub">

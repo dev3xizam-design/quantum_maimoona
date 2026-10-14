@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { platform } from "@/lib/connectors/catalog";
 import { marketplaceItem } from "@/lib/marketplace";
 import { statusOf } from "@/lib/marketplace-status";
+import { BrandLogo } from "@/components/BrandLogo";
 
 export const dynamic = "force-dynamic";
 
@@ -48,12 +49,7 @@ export default async function MarketplaceItemPage({ params }: { params: Promise<
 
       <section className="panel p-6">
         <div className="flex flex-wrap items-start gap-4">
-          <span
-            className="tile-icon shrink-0 font-bold text-white"
-            style={{ background: p?.color ?? "#555", width: 56, height: 56, borderRadius: 14, fontSize: (p?.monogram.length ?? 0) > 2 ? 13 : 20 }}
-          >
-            {p?.monogram ?? "Q"}
-          </span>
+          <BrandLogo brand={m.platformId} size={56} />
           <div className="min-w-0 flex-1">
             <h1 className="page-title">{m.name}</h1>
             <p className="mt-1 text-[13px] text-[var(--ink-2)]">{m.summary}</p>
