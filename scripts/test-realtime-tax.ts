@@ -202,3 +202,21 @@ test("quote: discount lowers both the sales base and the excise base", () => {
   assert.equal(q.lines[0].amount, 15);
   assert.equal(q.lines[0].excise?.amount, 3);
 });
+
+test("quote: California adds CECET, 12.5% of the retail price, on nicotine products only", () => {
+  const ca = (lines: Parameters<typeof computeQuote>[0]["lines"]) =>
+    computeQuote(
+      { address: { state: "CA", zip: "90012", city: "Los Angeles" }, lines, shipping: [] },
+      baseDeps({ excise: cfg({ state: "CA", structure: "A", rate: 0.5427, rateUnit: "pct_wholesale" }) }),
+    );
+  const q = ca([{ id: "a", title: "Tyson Iron Mike Tobacco", variantTitle: "1 Single", productType: "Disposable Vape", quantity: 1, unitPrice: 100 }]);
+  assert.deepEqual(q.lines[0].retailExcise, { code: "CECET", label: "CA CECET", rate: 0.125, amount: 12.5 });
+  assert.equal(q.lines[0].excise?.amount, 27.14); // 100 x 50% x 54.27%
+  assert.equal(q.totals.exciseTax, 39.64); // distributor excise + CECET
+
+  const none = computeQuote(
+    { address: { state: "IL", zip: "60601" }, lines: [{ id: "a", title: "Tyson", productType: "Disposable Vape", quantity: 1, unitPrice: 100 }], shipping: [] },
+    baseDeps(),
+  );
+  assert.equal(none.lines[0].retailExcise, null, "CECET is California only");
+});

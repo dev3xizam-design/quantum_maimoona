@@ -114,6 +114,9 @@ export function quoteToWire(q: Quote) {
             notes: l.excise.notes,
           }
         : null,
+      retail_excise_tax: l.retailExcise
+        ? { code: l.retailExcise.code, label: l.retailExcise.label, rate: l.retailExcise.rate, amount: l.retailExcise.amount }
+        : null,
       facts: { ml_per_unit: l.facts.mlPerUnit, cost_per_unit: l.facts.costPerUnit, system_type: l.facts.systemType, sources: l.facts.sources },
     })),
     shipping: q.shipping.map((s) => ({

@@ -14,6 +14,7 @@ import {
   IconUpload,
   IconStores,
   IconOrders,
+  IconMail,
 } from "@/components/icons";
 
 export const dynamic = "force-dynamic";
@@ -194,7 +195,6 @@ export default async function DashboardPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-1">
         <div>
           <div className="flex items-center gap-2 mb-1.5">
-            <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse" />
             <span className="text-[11px] font-extrabold tracking-wider uppercase text-[#4E5D6C]">
               Multi-State Tax Automation Engine · Active
             </span>
@@ -552,6 +552,13 @@ export default async function DashboardPage() {
             title="Store Feeds"
             sub={`${d.stores.connected} of ${d.stores.total} connected`}
             icon={<IconStores />}
+            category="data"
+          />
+          <QuickNavTile
+            href="/pact-email"
+            title="PACT Email"
+            sub="Automated state return emails"
+            icon={<IconMail />}
             category="data"
           />
           <QuickNavTile

@@ -41,7 +41,13 @@ const HARDWARE_TERMS = [
   "replacement glass", "hardware", "device only",
 ];
 
-const NON_NICOTINE_TERMS = ["zero nicotine", "0mg", "0 mg", "nicotine free", "nicotine-free", "cbd", "hemp"];
+const NON_NICOTINE_TERMS = ["zero nicotine", "nicotine free", "nicotine-free", "cbd", "hemp"];
+/**
+ * A strength of exactly zero ("0mg", "0 mg", "0.0mg", "0%"), not the tail of
+ * "50mg" or "20 mg" - a plain substring test called every 10/20/30/50mg
+ * product nicotine-free.
+ */
+const ZERO_STRENGTH = /(?<![\d.])0(?:\.0+)?\s*(?:mg|%)(?![a-z])/i;
 
 /**
  * Line items that are not merchandise at all. They still appear on every sale
@@ -148,7 +154,8 @@ export function classifyProduct(name: string | null | undefined, sku?: string | 
   }
 
   /* ---- Nicotine ------------------------------------------------------- */
-  const nonNic = findTerm(s, NON_NICOTINE_TERMS);
+  const zero = ZERO_STRENGTH.exec(s)?.[0] ?? null;
+  const nonNic = findTerm(s, NON_NICOTINE_TERMS) ?? zero;
   if (nonNic && !out.isHardware) {
     out.containsNicotine = false;
     out.nicotineEvidence = `name contains "${nonNic}"`;

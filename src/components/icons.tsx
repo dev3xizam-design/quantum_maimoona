@@ -63,6 +63,13 @@ export const IconProducts = () => (
   </svg>
 );
 
+export const IconMail = () => (
+  <svg {...base}>
+    <rect x="3" y="5" width="18" height="14" rx="2" />
+    <path d="m3 7 9 6 9-6" />
+  </svg>
+);
+
 export const IconOrders = () => (
   <svg {...base}>
     <path d="M6 3h12l1 4H5z" />

@@ -229,6 +229,17 @@ a { color: inherit; text-decoration: none; }
   font-weight: 800;
 }
 
+/* Brand Logo Tooltip: Merlot Red with Salted Cream text */
+.dock-tooltip-brand {
+  background: #4c050c !important;
+  border-color: rgba(227, 223, 206, 0.3) !important;
+  color: #e3dfce !important;
+  box-shadow: 0 8px 24px rgba(76, 5, 12, 0.45) !important;
+}
+.dock-tooltip-brand::before {
+  border-color: transparent #4c050c transparent transparent !important;
+}
+
 /* Avatar in Dock */
 .dock-avatar {
   width: 36px; height: 36px;

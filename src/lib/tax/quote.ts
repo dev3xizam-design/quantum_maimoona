@@ -60,6 +60,8 @@ export type QuoteLine = {
   amount: number;
   sales: { rate: number; amount: number; jurisdictions: TaxPiece[] };
   excise: ExciseLine | null;
+  /** A tax the retailer collects from the buyer on the retail price (California CECET). */
+  retailExcise: RetailExcise | null;
   facts: {
     mlPerUnit: number | null;
     costPerUnit: number | null;
@@ -103,6 +105,25 @@ function pieces(jurisdictions: RateJurisdiction[], base: number): TaxPiece[] {
   return jurisdictions.map((j) => ({ ...j, amount: base * j.rate }));
 }
 
+export type RetailExcise = { code: string; label: string; rate: number; amount: number };
+
+/**
+ * Retail-level e-cigarette taxes the seller collects from the buyer, on top of
+ * sales tax and separate from the distributor excise above.
+ * California Electronic Cigarette Excise Tax (CECET): 12.5% of the retail
+ * selling price of e-cigarettes containing or sold with nicotine, since
+ * July 1, 2022 (cdtfa.ca.gov/taxes-and-fees/electronic-cigarette-excise-tax.htm).
+ */
+const RETAIL_EXCISE: Record<string, { code: string; label: string; rate: number }> = {
+  CA: { code: "CECET", label: "CA CECET", rate: 0.125 },
+};
+
+export function retailExciseFor(state: string, amount: number, containsNicotine: boolean, isNonProduct: boolean): RetailExcise | null {
+  const t = RETAIL_EXCISE[state];
+  if (!t || !containsNicotine || isNonProduct || amount <= 0) return null;
+  return { ...t, amount: r2(amount * t.rate) };
+}
+
 export function computeQuote(input: QuoteInput, deps: QuoteDeps): Quote {
   const state = input.address.state.toUpperCase();
   const warnings: string[] = [];
@@ -139,6 +160,7 @@ export function computeQuote(input: QuoteInput, deps: QuoteDeps): Quote {
       amount: r2(amount),
       sales: { rate: facts.isNonProduct ? 0 : combined, amount: r2(salesAmount), jurisdictions: salesPieces },
       excise,
+      retailExcise: retailExciseFor(state, amount, facts.containsNicotine, facts.isNonProduct),
       facts: {
         mlPerUnit: facts.mlPerUnit,
         costPerUnit: facts.costPerUnit,
@@ -166,7 +188,8 @@ export function computeQuote(input: QuoteInput, deps: QuoteDeps): Quote {
   });
 
   const salesTax = r2(lines.reduce((s, l) => s + l.sales.amount, 0) + shipping.reduce((s, l) => s + l.tax, 0));
-  const exciseTax = r2(lines.reduce((s, l) => s + (l.excise?.amount ?? 0), 0));
+  // Excise total = distributor excise + retail excise (CECET), both shown apart from sales tax.
+  const exciseTax = r2(lines.reduce((s, l) => s + (l.excise?.amount ?? 0) + (l.retailExcise?.amount ?? 0), 0));
 
   return {
     address: {

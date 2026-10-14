@@ -17,6 +17,7 @@ import {
   IconStores,
   IconMarketplace,
   IconOrders,
+  IconMail,
 } from "./icons";
 
 type Badge = "overdue" | "review" | "months" | null;
@@ -44,6 +45,7 @@ const NAV_ITEMS: { category: string; items: NavItem[] }[] = [
       { href: "/upload", label: "Upload Data", icon: IconUpload },
       { href: "/orders", label: "Orders", icon: IconOrders },
       { href: "/products", label: "Products", icon: IconProducts, badge: "review" },
+      { href: "/pact-email", label: "PACT Email", icon: IconMail },
       { href: "/config/stores", label: "Stores", icon: IconStores },
       { href: "/marketplace", label: "Marketplace", icon: IconMarketplace },
     ],
@@ -113,7 +115,7 @@ export function Sidebar({
 
       {/* Desktop Antigravity / Mobbin Style Minimalist Icon Dock */}
       <aside className="sidebar-dock group/dock">
-        {/* Top: Pure Background-less Q Logo with Styled Dock Tooltip */}
+        {/* Top: Pure Background-less Q Logo with Red & Cream Floating Tooltip */}
         <div className="dock-brand pt-2 relative group/item flex items-center justify-center w-full">
           <Link
             href="/"
@@ -122,8 +124,8 @@ export function Sidebar({
           >
             <Logo size={36} />
           </Link>
-          <div className="dock-tooltip">
-            <span className="font-semibold text-[#E3DFCE]">Quantum</span>
+          <div className="dock-tooltip dock-tooltip-brand">
+            <span className="font-extrabold text-[#E3DFCE] tracking-wider uppercase text-[11px]">Quantum</span>
           </div>
         </div>
 

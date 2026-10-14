@@ -41,7 +41,7 @@ export function MobbinFooter() {
   return (
     <footer
       ref={footerRef}
-      className="mobbin-footer relative overflow-hidden bg-[#3F040A] text-[#E3DFCE] pt-14 pb-0 px-6 sm:px-12 border-t border-[rgba(227,223,206,0.14)] mt-16 transition-colors duration-500"
+      className="mobbin-footer relative overflow-hidden bg-[#4C050C] text-[#E3DFCE] pt-14 pb-0 px-6 sm:px-12 border-t border-[rgba(227,223,206,0.14)] mt-16 transition-colors duration-500"
     >
       <div className="mx-auto max-w-[1760px] relative z-10 flex flex-wrap items-center justify-between gap-6 text-[12.5px] pb-10">
         <div className="flex items-center gap-6">
@@ -64,7 +64,7 @@ export function MobbinFooter() {
       {/* Mobbin-style Giant Watermark:
           Positioned at the very bottom edge, submerged so only the top half is showing (like Mobbin).
           Letters (Q - U - A - N - T - U - M) emerge sequentially letter-by-letter on scroll
-          in a lighter tone of the #3F040A background (#7E1925), exactly like Mobbin's tone-on-tone */}
+          in a reddish cream shade (#E8D5CE) on top of the #4C050C Merlot background */}
       <div className="pointer-events-none select-none relative flex justify-center items-end overflow-hidden w-full">
         <div className="flex justify-center items-end tracking-tighter uppercase font-sans font-black">
           {LETTERS.map((letter, i) => {
@@ -77,7 +77,7 @@ export function MobbinFooter() {
 
             // Slides up from 100% (hidden below bottom edge) to 35% (half showing at bottom edge, exactly like Mobbin)
             const translateY = 100 - (eased * 65);
-            const opacity = Math.max(eased, 0.02);
+            const opacity = Math.max(eased * 0.9, 0.02);
 
             return (
               <span
@@ -88,7 +88,7 @@ export function MobbinFooter() {
                   lineHeight: 0.8,
                   opacity,
                   transform: `translateY(${translateY}%)`,
-                  color: "#7E1925", // Lighter shade of the #3F040A background
+                  color: "#E8D5CE", // Reddish cream shade on top of #4C050C background
                 }}
               >
                 {letter}

@@ -821,3 +821,68 @@ export const storeOrders = pgTable(
     index("store_orders_state_idx").on(t.state),
   ],
 );
+
+/* ------------------------------------------------------------------ */
+/* PACT email automation                                               */
+/* ------------------------------------------------------------------ */
+
+/**
+ * The mailbox PACT reports are sent from. Gmail over IMAP (to read the Sent
+ * folder) and SMTP (to send), signed in with a Google app password - an
+ * OAuth token for a personal Gmail in an unverified app expires every 7 days.
+ */
+export const emailAccounts = pgTable("email_accounts", {
+  id: serial("id").primaryKey(),
+  address: text("address").notNull().unique(),
+  provider: text("provider").notNull().default("gmail"),
+  secretCipher: text("secret_cipher").notNull(),
+  status: text("status").notNull().default("ok"), // ok | error
+  lastError: text("last_error"),
+  lastScanAt: timestamp("last_scan_at", { withTimezone: true }),
+  connectedBy: text("connected_by"),
+  connectedAt: timestamp("connected_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * Who gets each state's PACT report and how the email reads, learned from the
+ * mailbox's past sent PACT emails. Nothing is sent to a state until its row is
+ * confirmed. Templates carry {{month}} {{mon}} {{mm}} {{year}} {{period}}.
+ */
+export const pactRecipients = pgTable("pact_recipients", {
+  id: serial("id").primaryKey(),
+  state: text("state").notNull().unique(),
+  toAddresses: jsonb("to_addresses").$type<string[]>().notNull(),
+  ccAddresses: jsonb("cc_addresses").$type<string[]>().notNull().default([]),
+  subjectTemplate: text("subject_template").notNull(),
+  bodyTemplate: text("body_template").notNull(),
+  attachmentTemplate: text("attachment_template"),
+  /** What the past email attached (xlsx, pdf, csv...) - a non-Excel one is flagged. */
+  pastAttachmentTypes: jsonb("past_attachment_types").$type<string[]>().notNull().default([]),
+  learnedFrom: jsonb("learned_from").$type<{ messageId: string; date: string; subject: string }[]>().notNull().default([]),
+  learnedAt: timestamp("learned_at", { withTimezone: true }),
+  confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
+  confirmedBy: text("confirmed_by"),
+  active: boolean("active").notNull().default(true),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** Every PACT email Quantum sent, held or skipped - one row per state per month. */
+export const pactSends = pgTable(
+  "pact_sends",
+  {
+    id: serial("id").primaryKey(),
+    period: text("period").notNull(),
+    state: text("state").notNull(),
+    status: text("status").notNull(), // sent | failed | skipped | held
+    toAddresses: jsonb("to_addresses").$type<string[]>(),
+    subject: text("subject"),
+    attachmentName: text("attachment_name"),
+    shipmentCount: integer("shipment_count"),
+    messageId: text("message_id"),
+    detail: text("detail"),
+    attempts: integer("attempts").notNull().default(0),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("pact_sends_period_state_idx").on(t.period, t.state)],
+);
