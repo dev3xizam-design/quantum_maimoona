@@ -44,9 +44,9 @@
   --sand-100: #eae5d8;
   --sand-50:  #f5f1e8;
 
-  /* Dark Obsidian Dock Sidebar (Mobbin / Antigravity style) */
-  --dock-bg: #111418;
-  --dock-border: rgba(255, 255, 255, 0.08);
+  /* Dark Roasted Espresso Dock Sidebar (#1A0905 from brand swatch) */
+  --dock-bg: #1A0905;
+  --dock-border: rgba(227, 223, 206, 0.08);
 
   /* Modern Ambient Atmosphere */
   --bg: #dce6ee;         /* Ice Melt canvas backdrop */
@@ -136,7 +136,7 @@ a { color: inherit; text-decoration: none; }
 .dock-divider {
   width: 28px;
   height: 1px;
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(227, 223, 206, 0.12);
   margin: 6px 0;
 }
 
@@ -150,22 +150,22 @@ a { color: inherit; text-decoration: none; }
   cursor: pointer;
 }
 
-/* Inactive Icon: Light slate monochrome, hover reveals subtle glow */
+/* Inactive Icon: Ice Melt Blue (#94B1C8) monochrome, hover reveals subtle glow */
 .dock-btn-inactive {
-  color: #8c9bae;
+  color: #94b1c8;
   background: transparent;
 }
 .dock-btn-inactive:hover {
   color: #ffffff;
-  background: rgba(255, 255, 255, 0.09);
+  background: rgba(227, 223, 206, 0.1);
   transform: scale(1.06);
 }
 
 /* Active Icon: The RED highlight on selected option! */
 .dock-btn-active {
-  background: var(--red-pop);
+  background: #9e0d1b;
   color: #ffffff !important;
-  box-shadow: 0 4px 16px var(--red-pop-glow);
+  box-shadow: 0 4px 18px rgba(158, 13, 27, 0.45);
   transform: scale(1.05);
 }
 .dock-btn-active svg {
@@ -179,7 +179,7 @@ a { color: inherit; text-decoration: none; }
   width: 7px; height: 7px;
   border-radius: 999px;
   background: #ff4d5e;
-  border: 1.5px solid #111418;
+  border: 1.5px solid #1A0905;
   box-shadow: 0 0 8px rgba(255, 77, 94, 0.9);
 }
 

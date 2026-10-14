@@ -113,10 +113,14 @@ export function Sidebar({
 
       {/* Desktop Antigravity / Mobbin Style Minimalist Icon Dock */}
       <aside className="sidebar-dock group/dock">
-        {/* Top: New Q Logo */}
-        <div className="dock-brand">
-          <Link href="/" className="relative flex items-center justify-center p-2 rounded-xl transition-transform hover:scale-105 active:scale-95" title="Quantum Home">
-            <Logo size={34} />
+        {/* Top: New Q Logo in luxury Salted Cream squircle */}
+        <div className="dock-brand pt-1">
+          <Link
+            href="/"
+            className="group/logo relative flex items-center justify-center w-11 h-11 rounded-xl bg-[#E3DFCE] shadow-sm transition-all duration-200 hover:scale-105 active:scale-95"
+            title="Quantum Home"
+          >
+            <Logo size={26} />
           </Link>
         </div>
 
@@ -160,8 +164,8 @@ export function Sidebar({
           ))}
         </nav>
 
-        {/* Bottom: Profile & Sign out */}
-        <div className="dock-foot flex flex-col items-center gap-2 mt-auto pb-4 w-full">
+        {/* Bottom: Profile & Sign out with pb-24 clearance to prevent Next.js dev overlay overlap */}
+        <div className="dock-foot flex flex-col items-center gap-2 mt-auto pb-24 w-full">
           <div className="dock-divider" />
           
           {/* User Avatar with Tooltip */}
