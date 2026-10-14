@@ -1,7 +1,7 @@
 import "server-only";
-import { and, eq, inArray, sql as dsql } from "drizzle-orm";
+import { and, eq, inArray, like, or, sql as dsql } from "drizzle-orm";
 import { db } from "@/db";
-import { integrations, medusaProducts, products, shipments } from "@/db/schema";
+import { filings, integrations, medusaProducts, products, shipments } from "@/db/schema";
 import { classifyProduct } from "@/lib/products/classify";
 import { decryptSecret, encryptSecret, last4 } from "@/lib/crypto";
 import { detectAuthScheme, iterateProducts } from "./client";
@@ -88,7 +88,7 @@ export async function listConnections(): Promise<ConnectionView[]> {
   }));
 }
 
-async function credentialsFor(id: number) {
+export async function credentialsFor(id: number) {
   const [row] = await db.select().from(integrations).where(eq(integrations.id, id)).limit(1);
   if (!row) throw new Error("That connection no longer exists.");
   if (!row.secretCipher) throw new Error(`No API key saved for ${row.name}.`);
@@ -370,8 +370,14 @@ export type OrderSyncResult = {
   skippedNoAddress: number;
   skippedNonUs: number;
   skippedCancelled: number;
+  skippedNotShipped?: number;
+  removedUnshipped?: number;
   withCustomerName: number;
+  window?: string;
 };
+
+/** Scheduled pulls re-read this many days; shipments land within it. A manual "full" sync reads everything. */
+const PULL_WINDOW_DAYS = 60;
 
 /**
  * Reads orders and writes one shipment row per line, keyed on
@@ -380,23 +386,32 @@ export type OrderSyncResult = {
  */
 export async function syncOrders(
   integrationId: number,
-  opts: { createdAfter?: string } = {},
+  opts: { createdAfter?: string; full?: boolean } = {},
 ): Promise<OrderSyncResult> {
   const { row, baseUrl, secret, scheme } = await credentialsFor(integrationId);
+  const createdAfter =
+    opts.createdAfter ??
+    (!opts.full && row.ordersSyncedAt
+      ? new Date(Date.now() - PULL_WINDOW_DAYS * 86_400_000).toISOString().slice(0, 10)
+      : undefined);
 
   const all: ShipmentRowInput[] = [];
   let ordersRead = 0;
   let skippedNoAddress = 0;
   let skippedNonUs = 0;
   let skippedCancelled = 0;
+  let skippedNotShipped = 0;
+  const excluded: string[] = [];
 
-  for await (const page of iterateOrders(baseUrl, secret, scheme, { createdAfter: opts.createdAfter })) {
+  for await (const page of iterateOrders(baseUrl, secret, scheme, { createdAfter })) {
     ordersRead += page.length;
     const mapped = mapOrdersToShipments(page, row.slug);
     all.push(...mapped.rows);
     skippedNoAddress += mapped.skippedNoAddress;
     skippedNonUs += mapped.skippedNonUs;
     skippedCancelled += mapped.skippedCancelled;
+    skippedNotShipped += mapped.skippedNotShipped;
+    excluded.push(...mapped.excludedOrderIds);
   }
 
   const mlBySku = await millilitresBySku();
@@ -445,8 +460,13 @@ export async function syncOrders(
       });
   }
 
+  const removedUnshipped = await removeExcludedShipments(row.slug, excluded);
+
   const stats: OrderSyncResult = {
     store: row.name,
+    window: createdAfter ? `since ${createdAfter}` : "full history",
+    skippedNotShipped,
+    removedUnshipped,
     ordersRead,
     shipmentRows: values.length,
     periods: [...new Set(all.map((r) => r.period))].sort(),
@@ -463,6 +483,40 @@ export async function syncOrders(
     .where(eq(integrations.id, integrationId));
 
   return stats;
+}
+
+/**
+ * Takes canceled / not-yet-shipped orders back out of the PACT feed - but never
+ * out of a month whose PACT report is already filed; that one is left as filed.
+ */
+async function removeExcludedShipments(slug: string, orderIds: string[]): Promise<number> {
+  if (!orderIds.length) return 0;
+  const filed = await db
+    .select({ state: filings.state, period: filings.period })
+    .from(filings)
+    .where(and(eq(filings.taxType, "pact"), eq(filings.status, "filed")));
+  const filedKey = new Set(filed.map((f) => `${f.state}|${f.period}`));
+  const isFiled = (state: string, period: string) => {
+    const [y, m] = period.split("-");
+    return [period, `${y}-Q${Math.ceil(Number(m) / 3)}`, y].some((p) => filedKey.has(`${state}|${p}`));
+  };
+
+  let removed = 0;
+  for (let i = 0; i < orderIds.length; i += CHUNK) {
+    const ids = orderIds.slice(i, i + CHUNK);
+    const rows = await db
+      .select({ id: shipments.id, state: shipments.state, period: shipments.period })
+      .from(shipments)
+      .where(
+        or(...ids.map((id) => like(shipments.externalId, `medusa:${slug}:${id}:%`))),
+      );
+    const deletable = rows.filter((r) => !isFiled(r.state, r.period)).map((r) => r.id);
+    if (deletable.length) {
+      await db.delete(shipments).where(inArray(shipments.id, deletable));
+      removed += deletable.length;
+    }
+  }
+  return removed;
 }
 
 export async function millilitresBySku(): Promise<Map<string, number>> {

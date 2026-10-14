@@ -20,7 +20,9 @@ export function getSql() {
       "DATABASE_URL is not set. Add a Postgres connection string (Neon, Supabase, Vercel Postgres...) to .env.local or the Vercel project env.",
     );
   }
-  const client = postgres(connectionString, { max: 1, idle_timeout: 20, prepare: false });
+  // max 4: the real-time tax API runs its rate, config and product lookups in
+  // parallel; with one connection they queue behind each other.
+  const client = postgres(connectionString, { max: 4, idle_timeout: 20, prepare: false });
   globalForDb.__sql = client;
   return client;
 }

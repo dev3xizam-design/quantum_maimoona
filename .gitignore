@@ -50,3 +50,11 @@ next-env.d.ts
 
 # refresh working data (snapshots, census lists, last run)
 /automation/jurisdiction-refresh/state/
+
+# real-time tax rate build (scripts/rates): official downloads and generated
+# tables are re-created by the scripts; the per-state source notes and the
+# validation report are kept
+/data/rates/raw/
+/data/rates/build/
+/data/rates/derived/
+/data/rates/us-tax-rates.csv

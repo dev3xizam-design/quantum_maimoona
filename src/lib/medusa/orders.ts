@@ -42,6 +42,8 @@ export type MedusaOrder = {
   created_at?: string | null;
   email?: string | null;
   status?: string | null;
+  /** not_fulfilled | partially_fulfilled | fulfilled | partially_shipped | shipped | delivered ... */
+  fulfillment_status?: string | null;
   shipping_address?: MedusaAddress | null;
   items?: MedusaLineItem[] | null;
 };
@@ -76,7 +78,13 @@ export type OrderMapResult = {
   skippedNoAddress: number;
   skippedNonUs: number;
   skippedCancelled: number;
+  skippedNotShipped: number;
+  /** Orders that must NOT be in the PACT feed (canceled or not shipped) - stale rows get removed. */
+  excludedOrderIds: string[];
 };
+
+/** Only these count as shipped. Paid-but-sitting-in-the-warehouse is not a shipment. */
+export const SHIPPED_STATUSES = new Set(["shipped", "partially_shipped", "delivered", "partially_delivered"]);
 
 /**
  * One shipment row per order line. Anything that cannot be placed in a state is
@@ -88,10 +96,20 @@ export function mapOrdersToShipments(orders: MedusaOrder[], storeSlug: string): 
   let skippedNoAddress = 0;
   let skippedNonUs = 0;
   let skippedCancelled = 0;
+  let skippedNotShipped = 0;
+  const excludedOrderIds: string[] = [];
 
   for (const order of orders) {
     if ((order.status ?? "").toLowerCase() === "canceled") {
       skippedCancelled += 1;
+      excludedOrderIds.push(order.id);
+      continue;
+    }
+    // A Medusa that does not report fulfillment_status keeps the old behaviour
+    // (everything not canceled) rather than emptying the feed.
+    if (order.fulfillment_status != null && !SHIPPED_STATUSES.has(order.fulfillment_status.toLowerCase())) {
+      skippedNotShipped += 1;
+      excludedOrderIds.push(order.id);
       continue;
     }
     const address = order.shipping_address;
@@ -141,7 +159,7 @@ export function mapOrdersToShipments(orders: MedusaOrder[], storeSlug: string): 
     }
   }
 
-  return { rows, skippedNoAddress, skippedNonUs, skippedCancelled };
+  return { rows, skippedNoAddress, skippedNonUs, skippedCancelled, skippedNotShipped, excludedOrderIds };
 }
 
 /** Pages through /admin/orders. */
@@ -159,7 +177,7 @@ export async function* iterateOrders(
     const params = new URLSearchParams({
       limit: String(limit),
       offset: String(offset),
-      fields: "id,display_id,created_at,email,status,*items,*shipping_address",
+      fields: "id,display_id,created_at,email,status,fulfillment_status,*items,*shipping_address",
       order: "created_at",
     });
     if (opts.createdAfter) params.set("created_at[$gte]", opts.createdAfter);

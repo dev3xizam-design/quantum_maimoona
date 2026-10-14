@@ -10,6 +10,7 @@ import {
   jsonb,
   index,
   uniqueIndex,
+  primaryKey,
 } from "drizzle-orm/pg-core";
 
 /* ------------------------------------------------------------------ */
@@ -631,4 +632,128 @@ export const portals = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex("portal_label_idx").on(t.label), index("portal_state_idx").on(t.state)],
+);
+
+/* ------------------------------------------------------------------ */
+/* Real-time tax: rates, settings, committed documents                 */
+/* ------------------------------------------------------------------ */
+
+export type RateJurisdiction = {
+  type: "State" | "County" | "City" | "Special";
+  name: string;
+  code: string | null;
+  rate: number;
+};
+
+/**
+ * Combined sales-tax rate by destination, built from free official sources
+ * (SST rate+boundary files, state DOR rate files). ZIP-level, with an optional
+ * ZIP+4 range where the source has one. A ZIP that straddles rate areas has one
+ * row per area; `isPrimary` marks the one used when the address's city does not
+ * pick between them.
+ */
+export const taxRates = pgTable(
+  "tax_rates",
+  {
+    id: serial("id").primaryKey(),
+    state: text("state").notNull(),
+    zip5: text("zip5").notNull(),
+    plus4Low: text("plus4_low"),
+    plus4High: text("plus4_high"),
+    countyName: text("county_name"),
+    cityName: text("city_name"),
+    stateRate: numeric("state_rate", { precision: 10, scale: 6 }).notNull().default("0"),
+    countyRate: numeric("county_rate", { precision: 10, scale: 6 }).notNull().default("0"),
+    cityRate: numeric("city_rate", { precision: 10, scale: 6 }).notNull().default("0"),
+    specialRate: numeric("special_rate", { precision: 10, scale: 6 }).notNull().default("0"),
+    totalRate: numeric("total_rate", { precision: 10, scale: 6 }).notNull(),
+    jurisdictions: jsonb("jurisdictions").$type<RateJurisdiction[]>().notNull().default([]),
+    isPrimary: boolean("is_primary").notNull().default(true),
+    source: text("source").notNull(),
+    effectiveFrom: date("effective_from").notNull(),
+    effectiveTo: date("effective_to"),
+    loadedAt: timestamp("loaded_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("tax_rates_zip_idx").on(t.state, t.zip5)],
+);
+
+/**
+ * One distinct rate area (jurisdiction set + county/city label). ZIP+4 ranges
+ * point here instead of repeating the jurisdictions on 1.7M rows, which would
+ * not fit the database. Ids are assigned by scripts/rates/load-rates.ts.
+ */
+export const taxRateAreas = pgTable("tax_rate_areas", {
+  id: integer("id").primaryKey(),
+  state: text("state").notNull(),
+  countyName: text("county_name"),
+  cityName: text("city_name"),
+  stateRate: numeric("state_rate", { precision: 10, scale: 6 }).notNull().default("0"),
+  countyRate: numeric("county_rate", { precision: 10, scale: 6 }).notNull().default("0"),
+  cityRate: numeric("city_rate", { precision: 10, scale: 6 }).notNull().default("0"),
+  specialRate: numeric("special_rate", { precision: 10, scale: 6 }).notNull().default("0"),
+  totalRate: numeric("total_rate", { precision: 10, scale: 6 }).notNull(),
+  jurisdictions: jsonb("jurisdictions").$type<RateJurisdiction[]>().notNull().default([]),
+  source: text("source").notNull(),
+  effectiveFrom: date("effective_from").notNull(),
+  effectiveTo: date("effective_to"),
+});
+
+/**
+ * ZIP+4 ranges of a ZIP that holds more than one rate, packed into one row:
+ * `ranges` is flat triples [plus4Low, plus4High, areaId, ...].
+ */
+export const taxRatePlus4 = pgTable(
+  "tax_rate_plus4",
+  {
+    state: text("state").notNull(),
+    zip5: text("zip5").notNull(),
+    ranges: integer("ranges").array().notNull(),
+  },
+  (t) => [primaryKey({ name: "tax_rate_plus4_pk", columns: [t.state, t.zip5] })],
+);
+
+/** Key/value settings for the real-time tax API (e.g. the cost estimate ratio). */
+export const taxSettings = pgTable("tax_settings", {
+  key: text("key").primaryKey(),
+  value: jsonb("value").$type<unknown>(),
+  updatedBy: text("updated_by"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * A committed order - what Avalara calls a committed SalesInvoice. Written when
+ * the store reports the order SHIPPED; voided when it is cancelled or refunded.
+ * Its jurisdiction rows go into `transactions` in the same exploded shape an
+ * Avalara export has, so the filing engines read it unchanged.
+ */
+export const taxDocuments = pgTable(
+  "tax_documents",
+  {
+    id: serial("id").primaryKey(),
+    integrationId: integer("integration_id").references(() => integrations.id, {
+      onDelete: "set null",
+    }),
+    /** quantum:<store slug>:<order id> - the transactions.document_id too. */
+    documentCode: text("document_code").notNull(),
+    orderId: text("order_id").notNull(),
+    orderNumber: text("order_number"),
+    status: text("status").notNull().default("committed"), // committed | voided
+    documentDate: date("document_date").notNull(),
+    period: text("period").notNull(),
+    state: text("state").notNull(),
+    address: jsonb("address").$type<Record<string, unknown>>(),
+    subtotal: numeric("subtotal", { precision: 18, scale: 4 }).notNull().default("0"),
+    salesTax: numeric("sales_tax", { precision: 18, scale: 4 }).notNull().default("0"),
+    exciseTax: numeric("excise_tax", { precision: 18, scale: 4 }).notNull().default("0"),
+    /** What the store actually charged, when it told us - the collected side. */
+    collectedTax: numeric("collected_tax", { precision: 18, scale: 4 }),
+    lines: jsonb("lines").$type<Record<string, unknown>[]>(),
+    committedAt: timestamp("committed_at", { withTimezone: true }).notNull().defaultNow(),
+    voidedAt: timestamp("voided_at", { withTimezone: true }),
+    voidReason: text("void_reason"),
+  },
+  (t) => [
+    uniqueIndex("tax_doc_code_idx").on(t.documentCode),
+    index("tax_doc_period_idx").on(t.period, t.state),
+  ],
 );

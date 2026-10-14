@@ -11,6 +11,7 @@ const TABS = [
   { href: "/config/accounts", label: "Accounts" },
   { href: "/config/nexus", label: "Nexus thresholds" },
   { href: "/config/stores", label: "Stores" },
+  { href: "/config/realtime-tax", label: "Real-time tax" },
 ];
 
 export function ConfigTabs() {

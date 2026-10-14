@@ -283,6 +283,7 @@ export function StoresPanel({
                       {Number(stats.ordersRead ?? 0).toLocaleString()} orders read ·{" "}
                       {Number(stats.shipmentRows ?? 0).toLocaleString()} shipment lines · {String(stats.states ?? 0)} states
                       {Number(stats.skippedCancelled ?? 0) > 0 && ` · ${String(stats.skippedCancelled)} cancelled`}
+                      {Number(stats.skippedNotShipped ?? 0) > 0 && ` · ${String(stats.skippedNotShipped)} not shipped yet`}
                       {Number(stats.skippedNonUs ?? 0) > 0 && ` · ${String(stats.skippedNonUs)} non-US`}
                       {Number(stats.skippedNoAddress ?? 0) > 0 && ` · ${String(stats.skippedNoAddress)} with no US ship-to`}
                       {stats.window ? ` · ${String(stats.window)}` : ""}
@@ -346,9 +347,13 @@ export function StoresPanel({
                       {c.secretLast4 && ` · key ends ${c.secretLast4}`}
                       {c.ordersSyncedAt && ` · orders ${c.ordersSyncedAt}`}
                       {c.lastSyncedAt && ` · catalog ${c.lastSyncedAt}`}
+                      {c.pushKeyLast4 ? ` · real-time tax key ends ${c.pushKeyLast4}` : " · real-time tax off"}
                     </div>
                   </div>
                   <div className="ml-auto flex flex-wrap gap-1.5">
+                    <button className="btn btn-sm" disabled={pending} onClick={() => rotate(c.id)}>
+                      {c.pushKeyLast4 ? "New tax key" : "Real-time tax key"}
+                    </button>
                     <button className="btn btn-sm" disabled={pending || !c.syncOrders} onClick={() => orders(c.id)}>
                       Sync orders
                     </button>
@@ -367,6 +372,17 @@ export function StoresPanel({
 
                 {c.status !== "ok" && c.lastError && (
                   <div className="callout callout-warn mt-3">{c.lastError}</div>
+                )}
+                {freshKey?.id === c.id && (
+                  <div className="mt-3 rounded-lg border border-[var(--line)] bg-[var(--bg)] p-3 text-[12px]">
+                    <strong>Real-time tax key — copy it now, Quantum will not show it again.</strong>
+                    <code className="mt-1 block break-all">{freshKey.key}</code>
+                    <p className="mt-2 text-[var(--muted)]">
+                      Set it on the Medusa backend as <code>QUANTUM_API_KEY</code>, with{" "}
+                      <code>QUANTUM_API_URL</code> = this site&apos;s address. Checkout then calls{" "}
+                      <code>/api/tax/v1/calculate</code>, and shipped orders commit themselves.
+                    </p>
+                  </div>
                 )}
                 {c.orderStats && (
                   <p className="mt-2 text-[11.5px] text-[var(--muted)] tnum">
@@ -454,7 +470,7 @@ export function StoresPanel({
 }
 
 function describeOrders(r: OrderSyncResult): string {
-  const skipped = r.skippedNoAddress + r.skippedNonUs + r.skippedCancelled;
+  const skipped = r.skippedNoAddress + r.skippedNonUs + r.skippedCancelled + (r.skippedNotShipped ?? 0);
   return (
     `${r.store}: ${r.ordersRead} orders → ${r.shipmentRows} shipment lines across ${r.states} states` +
     (r.periods.length ? ` (${r.periods[0]} to ${r.periods[r.periods.length - 1]})` : "") +
