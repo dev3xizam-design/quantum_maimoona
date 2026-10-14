@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Logo } from "@/components/Logo";
 
 export const dynamic = "force-dynamic";
 
@@ -19,14 +18,11 @@ export default function GuidePage() {
       {/* Header & Pagehead */}
       <div className="pagehead">
         <div className="pagehead-row items-center justify-between">
-          <div className="flex items-center gap-3.5">
-            <Logo size={42} />
-            <div>
-              <h1 className="page-title text-[28px] font-extrabold tracking-tight">How Quantum Works</h1>
-              <p className="page-sub text-[13.5px] text-[var(--muted)] mt-0.5">
-                The definitive operational architecture and filing guide. Deterministic formulas, zero estimation, and complete audit integrity.
-              </p>
-            </div>
+          <div>
+            <h1 className="page-title text-[28px] font-extrabold tracking-tight">How Quantum Works</h1>
+            <p className="page-sub text-[13.5px] text-[var(--muted)] mt-0.5">
+              The definitive operational architecture and filing guide. Deterministic formulas, zero estimation, and complete audit integrity.
+            </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <span className="badge badge-ready font-bold">100% Deterministic</span>
