@@ -159,8 +159,8 @@ export function Sidebar({
           <Logo size={30} />
           {!collapsed && (
             <span className="flex flex-col leading-tight">
-              <span className="text-[15px] font-semibold tracking-tight text-white">Quantum</span>
-              <span className="text-[9.5px] uppercase tracking-[0.15em] text-white/45">
+              <span className="font-serif text-[18px] font-semibold tracking-tight text-white">Quantum</span>
+              <span className="text-[9px] font-bold uppercase tracking-[0.14em] text-[var(--sand-200)]/70">
                 Sales Tax Calculator AI
               </span>
             </span>

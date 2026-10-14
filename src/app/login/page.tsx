@@ -24,14 +24,14 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
       className="flex min-h-screen items-center justify-center px-6"
       style={{
         background:
-          "radial-gradient(1200px 600px at 50% -10%, #ede9fe 0%, transparent 62%), var(--bg)",
+          "radial-gradient(1000px 500px at 50% -10%, rgba(148, 177, 200, 0.4) 0%, transparent 70%), var(--bg)",
       }}
     >
-      <div className="w-full max-w-[380px]">
+      <div className="w-full max-w-[390px]">
         <div className="mb-7 flex flex-col items-center text-center">
-          <Logo size={54} />
-          <div className="mt-3 text-[20px] font-semibold tracking-tight">Quantum</div>
-          <div className="text-[11px] uppercase tracking-[0.16em] text-[var(--muted)]">
+          <Logo size={58} />
+          <div className="mt-3 font-serif text-[24px] font-semibold tracking-tight text-[var(--ink)]">Quantum</div>
+          <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-[var(--muted)]">
             Tax Automation
           </div>
           <div className="mt-1 text-[12px] text-[var(--muted)]">Maximum Vapor Inc.</div>

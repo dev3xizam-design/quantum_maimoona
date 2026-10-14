@@ -1,38 +1,54 @@
-import { drizzle } from "drizzle-orm/postgres-js";
+import { drizzle as drizzlePostgres } from "drizzle-orm/postgres-js";
+import { drizzle as drizzlePglite } from "drizzle-orm/pglite";
+import { PGlite } from "@electric-sql/pglite";
 import postgres from "postgres";
+import path from "node:path";
 import * as schema from "./schema";
 
-/**
- * Lazily connected so `next build` (which imports every route module) does not
- * need DATABASE_URL - only a request that actually touches the database does.
- * On Vercel, use your provider's POOLED connection string.
- */
 const globalForDb = globalThis as unknown as {
   __sql?: ReturnType<typeof postgres>;
-  __db?: ReturnType<typeof drizzle<typeof schema>>;
+  __pglite?: PGlite;
+  __db?: any;
 };
+
+export function isLocalPglite() {
+  const url = process.env.DATABASE_URL;
+  return (
+    !url ||
+    url === "local" ||
+    url.startsWith("pglite://") ||
+    url.includes("localhost:5432") ||
+    url.includes("user:pass@host")
+  );
+}
 
 export function getSql() {
   if (globalForDb.__sql) return globalForDb.__sql;
   const connectionString = process.env.DATABASE_URL;
-  if (!connectionString) {
-    throw new Error(
-      "DATABASE_URL is not set. Add a Postgres connection string (Neon, Supabase, Vercel Postgres...) to .env.local or the Vercel project env.",
-    );
+  if (!connectionString || isLocalPglite()) {
+    throw new Error("Using local embedded PGlite engine");
   }
-  // max 4: the real-time tax API runs its rate, config and product lookups in
-  // parallel; with one connection they queue behind each other.
   const client = postgres(connectionString, { max: 4, idle_timeout: 20, prepare: false });
   globalForDb.__sql = client;
   return client;
 }
 
 function getDb() {
-  if (!globalForDb.__db) globalForDb.__db = drizzle(getSql(), { schema });
+  if (globalForDb.__db) return globalForDb.__db;
+
+  if (isLocalPglite()) {
+    const dataDir = path.join(process.cwd(), "data", "pgdata");
+    const client = new PGlite(dataDir);
+    globalForDb.__pglite = client;
+    globalForDb.__db = drizzlePglite(client, { schema });
+    return globalForDb.__db;
+  }
+
+  globalForDb.__db = drizzlePostgres(getSql(), { schema });
   return globalForDb.__db;
 }
 
-type Db = ReturnType<typeof getDb>;
+type Db = any;
 
 /** Proxy so `db.select()` connects on first real use, not at import time. */
 export const db: Db = new Proxy({} as Db, {
@@ -47,6 +63,7 @@ export const db: Db = new Proxy({} as Db, {
 export const sql = {
   end: async () => {
     if (globalForDb.__sql) await globalForDb.__sql.end();
+    if (globalForDb.__pglite) await globalForDb.__pglite.close();
   },
 };
 
