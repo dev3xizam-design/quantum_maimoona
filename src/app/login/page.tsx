@@ -30,7 +30,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
       <div className="w-full max-w-[390px]">
         <div className="mb-7 flex flex-col items-center text-center">
           <Logo size={58} />
-          <div className="mt-3 font-serif text-[24px] font-semibold tracking-tight text-[var(--ink)]">Quantum</div>
+          <div className="mt-3 text-[26px] font-extrabold tracking-tight text-[var(--ink)]">Quantum</div>
           <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-[var(--muted)]">
             Tax Automation
           </div>

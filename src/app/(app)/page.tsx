@@ -18,20 +18,10 @@ import {
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Dashboard" };
 
-const TONES = {
-  violet: { bg: "var(--violet-soft)", fg: "var(--violet)" },
-  green: { bg: "var(--green-soft)", fg: "var(--green)" },
-  blue: { bg: "var(--blue-soft)", fg: "var(--blue)" },
-  amber: { bg: "var(--amber-soft)", fg: "var(--amber)" },
-  rose: { bg: "var(--rose-soft)", fg: "var(--rose)" },
-  teal: { bg: "var(--teal-soft)", fg: "var(--teal)" },
-} as const;
-
 function QuickLink({
   href,
   title,
   sub,
-  tone,
   icon,
   delay,
   badge,
@@ -39,12 +29,10 @@ function QuickLink({
   href: string;
   title: string;
   sub: string;
-  tone: keyof typeof TONES;
   icon: React.ReactNode;
   delay: number;
   badge?: string;
 }) {
-  const skin = TONES[tone];
   return (
     <Link
       href={href}
@@ -52,7 +40,7 @@ function QuickLink({
       style={{ "--d": `${delay}ms` } as React.CSSProperties}
     >
       <span className="flex items-center gap-2">
-        <span className="tile-icon" style={{ background: skin.bg, color: skin.fg }}>
+        <span className="tile-icon">
           {icon}
         </span>
         {badge && <span className="badge badge-overdue ml-auto">{badge}</span>}
@@ -69,7 +57,6 @@ function Stat({
   label,
   value,
   sub,
-  tone,
   variant = "sand",
   href,
   delay,
@@ -77,17 +64,15 @@ function Stat({
   label: string;
   value: string;
   sub: string;
-  tone: keyof typeof TONES | "warn";
   variant?: "sand" | "ice" | "alert";
   href: string;
   delay: number;
 }) {
   const variantClass =
     variant === "ice" ? "stat-ice" : variant === "alert" ? "stat-alert" : "stat-sand";
-  const skin = tone === "warn" ? { bg: "var(--danger-soft)", fg: "var(--danger)" } : TONES[tone];
   return (
     <Link href={href} className={`stat ${variantClass} anim-up`} style={{ "--d": `${delay}ms` } as React.CSSProperties}>
-      <span className="tile-icon" style={{ background: skin.bg, color: skin.fg }}>
+      <span className="tile-icon">
         {label === "Overdue" ? <IconReturns /> : <IconMonths />}
       </span>
       <div className="stat-label mt-2.5">{label}</div>
@@ -162,7 +147,6 @@ export default async function DashboardPage() {
           label="Latest month"
           value={d.latest ? fmtMoney(d.latest.totalTax) : "—"}
           sub={d.latest ? `${periodLabel(d.latest.month)} · ${d.latest.states} states` : "nothing computed"}
-          tone="violet"
           variant="sand"
           href={latestMonth ? `/months/${latestMonth}` : "/months"}
           delay={0}
@@ -175,7 +159,6 @@ export default async function DashboardPage() {
               ? `${d.monthsWithData - d.monthsComputed} not computed yet`
               : "all months computed"
           }
-          tone="blue"
           variant="ice"
           href="/months"
           delay={60}
@@ -184,7 +167,6 @@ export default async function DashboardPage() {
           label="Overdue"
           value={d.overdueCount.toLocaleString()}
           sub={d.overdueCount ? "returns past their due date" : "nothing outstanding"}
-          tone="warn"
           variant="alert"
           href="/returns?tab=overdue"
           delay={120}
@@ -193,7 +175,6 @@ export default async function DashboardPage() {
           label="SKUs missing cost"
           value={d.gaps.noCost.toLocaleString()}
           sub={d.gaps.noCost ? "excise is understated" : "nothing outstanding"}
-          tone="amber"
           variant={d.gaps.noCost ? "alert" : "sand"}
           href="/products?tab=cost"
           delay={180}
@@ -202,7 +183,7 @@ export default async function DashboardPage() {
 
       {/* ---- quick links ---- */}
       <section>
-        <h2 className="mb-2.5 text-[13px] font-semibold uppercase tracking-[0.06em] text-[var(--muted)]">
+        <h2 className="mb-3 text-[12px] font-bold uppercase tracking-[0.08em] text-[var(--muted)]">
           Jump to
         </h2>
         <div className="tilegrid">
@@ -210,7 +191,6 @@ export default async function DashboardPage() {
             href="/months"
             title="Months"
             sub="Every month, state by state"
-            tone="violet"
             icon={<IconMonths />}
             delay={0}
             badge={d.monthsWithData > d.monthsComputed ? `${d.monthsWithData - d.monthsComputed} to compute` : undefined}
@@ -219,7 +199,6 @@ export default async function DashboardPage() {
             href="/upload"
             title="Upload"
             sub="Avalara export, purchases, Shopify"
-            tone="blue"
             icon={<IconUpload />}
             delay={50}
           />
@@ -227,7 +206,6 @@ export default async function DashboardPage() {
             href="/products"
             title="Products"
             sub={`${d.gaps.soldSkus.toLocaleString()} SKUs have sold`}
-            tone="teal"
             icon={<IconProducts />}
             delay={100}
             badge={d.gaps.noCost ? `${d.gaps.noCost} need cost` : undefined}
@@ -236,7 +214,6 @@ export default async function DashboardPage() {
             href="/returns"
             title="Returns"
             sub="Every computed return"
-            tone="rose"
             icon={<IconReturns />}
             delay={150}
             badge={d.overdueCount ? `${d.overdueCount} overdue` : undefined}
@@ -245,7 +222,6 @@ export default async function DashboardPage() {
             href="/calendar"
             title="Calendar"
             sub="What is due, and when"
-            tone="amber"
             icon={<IconCalendar />}
             delay={200}
           />
@@ -253,7 +229,6 @@ export default async function DashboardPage() {
             href="/portals"
             title="Portals"
             sub={`${d.portals.withLink} state logins, one click away`}
-            tone="teal"
             icon={<IconPortals />}
             delay={250}
           />
@@ -261,7 +236,6 @@ export default async function DashboardPage() {
             href="/config/stores"
             title="Stores"
             sub={`${d.stores.connected} of ${d.stores.total} connected`}
-            tone="violet"
             icon={<IconConfig />}
             delay={300}
           />
@@ -269,7 +243,6 @@ export default async function DashboardPage() {
             href="/config"
             title="Rates & rules"
             sub="Editable, effective-dated"
-            tone="green"
             icon={<IconConfig />}
             delay={350}
           />
@@ -277,7 +250,6 @@ export default async function DashboardPage() {
             href="/guide"
             title="Guide"
             sub="How the whole system works"
-            tone="blue"
             icon={<IconGuide />}
             delay={400}
           />

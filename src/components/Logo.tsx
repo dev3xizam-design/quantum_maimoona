@@ -1,26 +1,17 @@
 import Image from "next/image";
 
-export function Logo({ size = 28, showWordmark = false }: { size?: number; showWordmark?: boolean }) {
-  if (showWordmark) {
-    return (
-      <Image
-        src="/brand/quantum-logo-600.png"
-        alt="Quantum"
-        width={1291}
-        height={332}
-        priority
-        style={{ height: size, width: "auto" }}
-      />
-    );
-  }
+export function Logo({ size = 34, showWordmark = false }: { size?: number; showWordmark?: boolean }) {
   return (
-    <Image
-      src="/brand/quantum-mark-256.png"
-      alt="Quantum"
-      width={347}
-      height={332}
-      priority
-      style={{ height: size, width: size }}
-    />
+    <div className="relative flex items-center justify-center flex-none">
+      <Image
+        src="/brand/q-logo.png"
+        alt="Quantum"
+        width={128}
+        height={128}
+        priority
+        className="object-contain drop-shadow-sm transition-transform duration-200 hover:scale-105"
+        style={{ height: size, width: size }}
+      />
+    </div>
   );
 }
