@@ -160,6 +160,17 @@ export const PLATFORMS: Platform[] = [
     manualHelp: "Uses the Medusa form below — backend URL + secret API key.",
   },
   {
+    id: "prestashop",
+    name: "PrestaShop",
+    color: "#df0067",
+    monogram: "P",
+    tagline: "Planned. Connect PrestaShop via the Connect API or upcoming module.",
+    oneClick: "never",
+    manualFields: [],
+    manualHelp: "Use the Connect API key below to send orders from PrestaShop.",
+    pluginSlug: "prestashop-module",
+  },
+  {
     id: "push",
     name: "Any other platform",
     color: "#0f766e",

@@ -164,7 +164,7 @@ export const MARKETPLACE: MarketplaceItem[] = [
     slug: "prestashop-module",
     name: "Quantum for PrestaShop",
     platform: "PrestaShop",
-    platformId: "push",
+    platformId: "prestashop",
     kind: "plugin",
     summary: "Planned. Today, PrestaShop stores can post orders to the Connect API.",
     listing: { store: "PrestaShop Addons", status: "planned" },
