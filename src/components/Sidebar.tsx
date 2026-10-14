@@ -21,6 +21,7 @@ import {
   IconUpload,
   IconStores,
   IconMarketplace,
+  IconOrders,
 } from "./icons";
 
 type Badge = "overdue" | "review" | "months" | null;
@@ -44,6 +45,7 @@ const GROUPS: {
     links: [
       { href: "/upload", label: "Upload", icon: IconUpload },
       { href: "/config/stores", label: "Stores", icon: IconStores },
+      { href: "/orders", label: "Orders", icon: IconOrders },
       { href: "/products", label: "Products", icon: IconProducts, badge: "review" },
       { href: "/marketplace", label: "Marketplace", icon: IconMarketplace },
     ],

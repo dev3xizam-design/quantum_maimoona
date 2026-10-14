@@ -1,7 +1,7 @@
 import "server-only";
 import { and, eq, sql as dsql } from "drizzle-orm";
 import { db } from "@/db";
-import { integrations, monthlySnapshots, taxDocuments } from "@/db/schema";
+import { integrations, monthlySnapshots, storeOrders, taxDocuments, type StoreOrderItem } from "@/db/schema";
 import { computeAndStoreMonth } from "../months";
 import { authHeader } from "../medusa/match";
 import { credentialsFor } from "../medusa/sync";
@@ -40,6 +40,12 @@ const ORDER_FIELDS = [
   "email",
   "status",
   "fulfillment_status",
+  "payment_status",
+  "total",
+  "subtotal",
+  "tax_total",
+  "summary.refunded_total",
+  "*billing_address",
   "*items",
   "*items.tax_lines",
   "*items.adjustments",
@@ -136,6 +142,116 @@ export function commitPayloadFromOrder(order: AnyOrder, shipped: string): Commit
   });
 }
 
+const money = (n: unknown) => Math.round((Number(n) || 0) * 10000) / 10000;
+
+/** The store_orders row for an admin order: what the store has, as it has it. */
+function storeOrderRow(conn: { id: number; name: string }, order: AnyOrder): typeof storeOrders.$inferInsert {
+  const a = order.shipping_address ?? {};
+  const items: StoreOrderItem[] = (order.items ?? []).map((i: AnyOrder) => {
+    const quantity = Number(i.quantity ?? 0);
+    const unitPrice = money(i.unit_price);
+    const discount = money((i.adjustments ?? []).reduce((s: number, x: AnyOrder) => s + Number(x.amount ?? 0), 0));
+    const total = money(unitPrice * quantity - discount);
+    const taxLines = (i.tax_lines ?? []).map((t: AnyOrder) => ({ code: t.code ?? null, rate: Number(t.rate ?? 0) }));
+    return {
+      id: i.id,
+      title: i.product_title ?? i.title ?? null,
+      variant: i.variant_title ?? i.subtitle ?? null,
+      sku: i.variant_sku ?? null,
+      productType: i.product_type ?? null,
+      quantity,
+      unitPrice,
+      discount,
+      total,
+      taxCollected: money(taxLines.reduce((s: number, t: { rate: number }) => s + (t.rate / 100) * total, 0)),
+      taxLines,
+    };
+  });
+  const shipping = (order.shipping_methods ?? []).map((m: AnyOrder) => {
+    const amount = money(m.amount);
+    return {
+      id: m.id,
+      name: m.name ?? null,
+      amount,
+      taxCollected: money((m.tax_lines ?? []).reduce((s: number, t: AnyOrder) => s + (Number(t.rate ?? 0) / 100) * amount, 0)),
+    };
+  });
+  const itemsTotal = items.reduce((s, i) => s + i.total, 0);
+  const shippingTotal = shipping.reduce((s: number, m: { amount: number }) => s + m.amount, 0);
+  const taxFromLines = items.reduce((s, i) => s + i.taxCollected, 0) + shipping.reduce((s: number, m: { taxCollected: number }) => s + m.taxCollected, 0);
+  const name = [a.first_name, a.last_name].filter(Boolean).join(" ").trim();
+  return {
+    integrationId: conn.id,
+    storeName: conn.name,
+    orderId: order.id,
+    orderNumber: order.display_id != null ? String(order.display_id) : null,
+    status: order.status ?? null,
+    fulfillmentStatus: order.fulfillment_status ?? null,
+    paymentStatus: order.payment_status ?? null,
+    orderedAt: new Date(order.created_at),
+    shippedAt: shippedAt(order) ? new Date(shippedAt(order)!) : null,
+    customerName: name || a.company || null,
+    email: order.email ?? null,
+    phone: a.phone ?? null,
+    state: a.province ? String(a.province).replace(/^us-/i, "").toUpperCase() : null,
+    city: a.city ?? null,
+    zip: a.postal_code ?? null,
+    shippingAddress: order.shipping_address ?? null,
+    billingAddress: order.billing_address ?? null,
+    items,
+    shipping,
+    itemCount: items.reduce((s, i) => s + i.quantity, 0),
+    // From the lines, before tax: Medusa's item_total / shipping_total include tax.
+    subtotal: String(money(items.reduce((s, i) => s + i.unitPrice * i.quantity, 0))),
+    shippingTotal: String(money(shippingTotal)),
+    discountTotal: String(money(items.reduce((s, i) => s + i.discount, 0))),
+    taxCollected: String(money(order.tax_total ?? taxFromLines)),
+    refunded: String(money(order.summary?.refunded_total ?? 0)),
+    total: String(money(order.total ?? itemsTotal + shippingTotal + taxFromLines)),
+    storeUpdatedAt: order.updated_at ? new Date(order.updated_at) : null,
+    syncedAt: new Date(),
+  };
+}
+
+async function saveOrders(conn: { id: number; name: string }, orders: AnyOrder[]) {
+  const rows = orders.filter((o) => o.id && o.created_at).map((o) => storeOrderRow(conn, o));
+  if (!rows.length) return;
+  await db
+    .insert(storeOrders)
+    .values(rows)
+    .onConflictDoUpdate({
+      target: [storeOrders.integrationId, storeOrders.orderId],
+      set: {
+        storeName: dsql`excluded.store_name`,
+        orderNumber: dsql`excluded.order_number`,
+        status: dsql`excluded.status`,
+        fulfillmentStatus: dsql`excluded.fulfillment_status`,
+        paymentStatus: dsql`excluded.payment_status`,
+        orderedAt: dsql`excluded.ordered_at`,
+        shippedAt: dsql`excluded.shipped_at`,
+        customerName: dsql`excluded.customer_name`,
+        email: dsql`excluded.email`,
+        phone: dsql`excluded.phone`,
+        state: dsql`excluded.state`,
+        city: dsql`excluded.city`,
+        zip: dsql`excluded.zip`,
+        shippingAddress: dsql`excluded.shipping_address`,
+        billingAddress: dsql`excluded.billing_address`,
+        items: dsql`excluded.items`,
+        shipping: dsql`excluded.shipping`,
+        itemCount: dsql`excluded.item_count`,
+        subtotal: dsql`excluded.subtotal`,
+        shippingTotal: dsql`excluded.shipping_total`,
+        discountTotal: dsql`excluded.discount_total`,
+        taxCollected: dsql`excluded.tax_collected`,
+        refunded: dsql`excluded.refunded`,
+        total: dsql`excluded.total`,
+        storeUpdatedAt: dsql`excluded.store_updated_at`,
+        syncedAt: dsql`excluded.synced_at`,
+      },
+    });
+}
+
 async function* changedOrders(
   baseUrl: string,
   auth: string,
@@ -193,7 +309,14 @@ async function saveState(id: number, patch: PullState) {
     .where(eq(integrations.id, id));
 }
 
-export async function pullStoreOrders(integrationId: number, opts: { since?: string } = {}): Promise<PullResult | null> {
+/**
+ * `history`: save every order the store has into store_orders and nothing else -
+ * no commits, no voids, the cursor stays where it is. For the one-time backfill.
+ */
+export async function pullStoreOrders(
+  integrationId: number,
+  opts: { since?: string; history?: boolean } = {},
+): Promise<PullResult | null> {
   const started = Date.now();
   if (!(await lock(integrationId))) return null;
 
@@ -206,8 +329,9 @@ export async function pullStoreOrders(integrationId: number, opts: { since?: str
   // order date instead - a bulk edit can touch every order in a store's history
   // (Vape Closeouts: all 8,902 updated since August), and only recent orders can
   // ship on or after the start date.
-  const filter: { field: "updated_at" | "created_at"; since: string } =
-    opts.since || state.cursor
+  const filter: { field: "updated_at" | "created_at"; since: string } = opts.history
+    ? { field: "created_at", since: "2000-01-01T00:00:00.000Z" }
+    : opts.since || state.cursor
       ? { field: "updated_at", since: opts.since ?? new Date(new Date(state.cursor!).getTime() - OVERLAP_MS).toISOString() }
       : { field: "created_at", since: new Date(new Date(start).getTime() - FIRST_RUN_LOOKBACK_DAYS * 86_400_000).toISOString() };
   const since = filter.since;
@@ -231,6 +355,11 @@ export async function pullStoreOrders(integrationId: number, opts: { since?: str
   try {
     const auth = authHeader(secret, scheme);
     for await (const page of changedOrders(baseUrl, auth, filter)) {
+      await saveOrders(conn, page);
+      if (opts.history) {
+        result.read += page.length;
+        continue;
+      }
       for (const order of page) {
         result.read += 1;
         if (order.updated_at && order.updated_at > cursor) cursor = order.updated_at;
@@ -284,7 +413,7 @@ export async function pullStoreOrders(integrationId: number, opts: { since?: str
     // retried because it is re-read inside the overlap or when it changes.
     const failedAll = result.errors.some((x) => x.order === "*");
     await saveState(integrationId, {
-      cursor: failedAll ? state.cursor : cursor,
+      cursor: failedAll || opts.history ? state.cursor : cursor,
       lockedUntil: null,
       lastRunAt: new Date().toISOString(),
       lastResult: result,

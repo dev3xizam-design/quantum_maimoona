@@ -63,6 +63,14 @@ export const IconProducts = () => (
   </svg>
 );
 
+export const IconOrders = () => (
+  <svg {...base}>
+    <path d="M6 3h12l1 4H5z" />
+    <path d="M5 7v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7" />
+    <path d="M9 12h6M9 16h4" />
+  </svg>
+);
+
 export const IconUpload = () => (
   <svg {...base}>
     <path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" />

@@ -757,3 +757,67 @@ export const taxDocuments = pgTable(
     index("tax_doc_period_idx").on(t.period, t.state),
   ],
 );
+
+/**
+ * Every order from every connected store, as the store has it now - customer,
+ * addresses, products, prices, the tax the store charged, status and dates.
+ * Filled by the scheduled order pull (lib/tax/order-pull) and its history
+ * backfill; Quantum's own tax for an order is in tax_documents.
+ */
+export type StoreOrderItem = {
+  id: string;
+  title: string | null;
+  variant: string | null;
+  sku: string | null;
+  productType: string | null;
+  quantity: number;
+  unitPrice: number;
+  discount: number;
+  total: number;
+  taxCollected: number;
+  taxLines: { code: string | null; rate: number }[];
+};
+export type StoreOrderShipping = { id: string; name: string | null; amount: number; taxCollected: number };
+
+export const storeOrders = pgTable(
+  "store_orders",
+  {
+    id: serial("id").primaryKey(),
+    integrationId: integer("integration_id")
+      .notNull()
+      .references(() => integrations.id, { onDelete: "cascade" }),
+    storeName: text("store_name").notNull(),
+    orderId: text("order_id").notNull(),
+    orderNumber: text("order_number"),
+    status: text("status"),
+    fulfillmentStatus: text("fulfillment_status"),
+    paymentStatus: text("payment_status"),
+    orderedAt: timestamp("ordered_at", { withTimezone: true }).notNull(),
+    shippedAt: timestamp("shipped_at", { withTimezone: true }),
+    customerName: text("customer_name"),
+    email: text("email"),
+    phone: text("phone"),
+    state: text("state"),
+    city: text("city"),
+    zip: text("zip"),
+    shippingAddress: jsonb("shipping_address").$type<Record<string, unknown>>(),
+    billingAddress: jsonb("billing_address").$type<Record<string, unknown>>(),
+    items: jsonb("items").$type<StoreOrderItem[]>().notNull(),
+    shipping: jsonb("shipping").$type<StoreOrderShipping[]>().notNull(),
+    itemCount: integer("item_count").notNull().default(0),
+    subtotal: numeric("subtotal", { precision: 18, scale: 4 }).notNull().default("0"),
+    shippingTotal: numeric("shipping_total", { precision: 18, scale: 4 }).notNull().default("0"),
+    discountTotal: numeric("discount_total", { precision: 18, scale: 4 }).notNull().default("0"),
+    taxCollected: numeric("tax_collected", { precision: 18, scale: 4 }).notNull().default("0"),
+    /** Refunded after payment; the store's total is already net of it. */
+    refunded: numeric("refunded", { precision: 18, scale: 4 }).notNull().default("0"),
+    total: numeric("total", { precision: 18, scale: 4 }).notNull().default("0"),
+    storeUpdatedAt: timestamp("store_updated_at", { withTimezone: true }),
+    syncedAt: timestamp("synced_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("store_orders_order_idx").on(t.integrationId, t.orderId),
+    index("store_orders_ordered_idx").on(t.orderedAt),
+    index("store_orders_state_idx").on(t.state),
+  ],
+);
