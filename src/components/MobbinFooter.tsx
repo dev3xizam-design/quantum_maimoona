@@ -15,9 +15,8 @@ export function MobbinFooter() {
       const windowHeight = window.innerHeight;
 
       // Start calculating as footer enters the viewport
-      // The animation spans across the entire scrolling travel through the footer
-      const startPoint = windowHeight * 0.9;
-      const endPoint = windowHeight - rect.height + 60;
+      const startPoint = windowHeight * 0.95;
+      const endPoint = windowHeight - rect.height + 40;
       const totalDistance = startPoint - endPoint;
 
       if (rect.top <= startPoint) {
@@ -42,12 +41,12 @@ export function MobbinFooter() {
   return (
     <footer
       ref={footerRef}
-      className="mobbin-footer relative overflow-hidden bg-[#1A0905] text-[#E3DFCE] pt-14 pb-20 px-6 sm:px-12 border-t border-[rgba(227,223,206,0.12)] mt-16 transition-colors duration-500"
+      className="mobbin-footer relative overflow-hidden bg-[#3F040A] text-[#E3DFCE] pt-14 pb-0 px-6 sm:px-12 border-t border-[rgba(227,223,206,0.14)] mt-16 transition-colors duration-500"
     >
-      <div className="mx-auto max-w-[1760px] relative z-10 flex flex-wrap items-center justify-between gap-6 text-[12.5px]">
+      <div className="mx-auto max-w-[1760px] relative z-10 flex flex-wrap items-center justify-between gap-6 text-[12.5px] pb-10">
         <div className="flex items-center gap-6">
           <span className="font-extrabold text-[#E3DFCE] tracking-tight">© Quantum 2018–2026.</span>
-          <span className="hidden sm:inline text-[#94B1C8]/70 text-[12px]">
+          <span className="hidden sm:inline text-[#E3DFCE]/60 text-[12px]">
             Tax Automation Engine · Maximum Vapor Inc.
           </span>
         </div>
@@ -58,44 +57,38 @@ export function MobbinFooter() {
           <a href="/config" className="hover:text-white transition-colors">Excise Rates</a>
           <a href="/audit" className="hover:text-white transition-colors">Audit Trail</a>
           <span className="text-[#E3DFCE]/25">|</span>
-          <span className="text-[#94B1C8]/80 text-[11px] font-semibold">Pantone 19-1534 TCX Merlot & 13-4306 TCX Ice Melt</span>
+          <span className="text-[#E3DFCE]/70 text-[11px] font-semibold">Pantone 19-1534 TCX Merlot & 13-4306 TCX Ice Melt</span>
         </div>
       </div>
 
-      {/* Mobbin-style Letter-by-Letter Watermark Reveal:
-          Letters (Q - U - A - N - T - U - M) emerge sequentially one by one as you scroll down */}
-      <div className="pointer-events-none select-none relative -mb-8 mt-12 flex justify-center items-center overflow-hidden min-h-[140px] sm:min-h-[180px] lg:min-h-[220px]">
-        <div className="flex justify-center items-center gap-1 sm:gap-2 tracking-tighter uppercase font-sans font-black">
+      {/* Mobbin-style Giant Watermark:
+          Positioned at the very bottom edge, submerged so only the top half is showing (like Mobbin).
+          Letters (Q - U - A - N - T - U - M) emerge sequentially letter-by-letter on scroll
+          in a lighter tone of the #3F040A background (#7E1925), exactly like Mobbin's tone-on-tone */}
+      <div className="pointer-events-none select-none relative flex justify-center items-end overflow-hidden w-full">
+        <div className="flex justify-center items-end tracking-tighter uppercase font-sans font-black">
           {LETTERS.map((letter, i) => {
-            // Sequential stagger: each letter has its own dedicated scroll window
-            // Q starts at 0.05, U at 0.18, A at 0.32, N at 0.46, T at 0.60, U at 0.74, M at 0.86
+            // Stagger reveal for each letter across the scroll range
             const letterWindow = 0.22;
-            const stepStart = 0.05 + i * 0.12;
-            const stepEnd = stepStart + letterWindow;
+            const stepStart = 0.05 + i * 0.11;
             
             const rawProgress = Math.min(Math.max((revealProgress - stepStart) / letterWindow, 0), 1);
-            // Smooth ease out per letter
             const eased = Math.sin((rawProgress * Math.PI) / 2);
-            
-            // True letter-by-letter reveal: stays 0 until its turn, then rises to elegant maroon tone
-            const opacity = eased * 0.85;
-            const translateY = (1 - eased) * 50;
-            const scale = 0.88 + eased * 0.12;
+
+            // Slides up from 100% (hidden below bottom edge) to 35% (half showing at bottom edge, exactly like Mobbin)
+            const translateY = 100 - (eased * 65);
+            const opacity = Math.max(eased, 0.02);
 
             return (
               <span
                 key={i}
-                className="inline-block transition-all duration-200 ease-out"
+                className="inline-block transition-transform duration-150 ease-out font-black"
                 style={{
-                  fontSize: "clamp(64px, 15vw, 210px)",
-                  lineHeight: 0.82,
+                  fontSize: "clamp(80px, 18vw, 250px)",
+                  lineHeight: 0.8,
                   opacity,
-                  transform: `translateY(${translateY}px) scale(${scale})`,
-                  // Luxury Merlot to Wine Red gradient blending seamlessly with brand colors
-                  backgroundImage: "linear-gradient(180deg, #8A1522 0%, #630C16 50%, #4C050C 100%)",
-                  WebkitBackgroundClip: "text",
-                  WebkitTextFillColor: "transparent",
-                  filter: `drop-shadow(0 4px 14px rgba(76, 5, 12, ${eased * 0.45}))`,
+                  transform: `translateY(${translateY}%)`,
+                  color: "#7E1925", // Lighter shade of the #3F040A background
                 }}
               >
                 {letter}
