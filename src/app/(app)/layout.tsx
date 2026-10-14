@@ -11,8 +11,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <Sidebar user={session} stats={stats} onSignOut={logout} />
       <div className="flex min-h-screen flex-col">
         <main className="mx-auto w-full max-w-[1760px] flex-1 px-4 py-5 sm:px-6 sm:py-6">{children}</main>
-        <footer className="border-t border-[var(--line)] bg-white">
-          <div className="mx-auto flex w-full max-w-[1760px] flex-wrap items-center gap-x-6 gap-y-1 px-4 py-3 text-[11px] text-[var(--muted)] sm:px-6">
+        <footer className="border-t border-[var(--line)] bg-[var(--bg)]/90 backdrop-blur-md">
+          <div className="mx-auto flex w-full max-w-[1760px] flex-wrap items-center gap-x-6 gap-y-1 px-4 py-3 text-[11px] font-medium text-[var(--muted)] sm:px-6">
             <span>
               Quantum prepares returns; a person files them. Every figure is a formula or a lookup,
               never an estimate.

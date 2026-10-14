@@ -11,7 +11,7 @@ export function LoginForm({ firstRun, next }: { firstRun: boolean; next?: string
     <form action={formAction} className="panel space-y-4 p-5">
       {next && <input type="hidden" name="next" value={next} />}
       <div>
-        <h1 className="text-[15px] font-semibold">
+        <h1 className="font-serif text-[18px] font-bold text-[var(--ink)]">
           {firstRun ? "Create the first account" : "Sign in"}
         </h1>
         {firstRun && (

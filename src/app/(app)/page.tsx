@@ -70,6 +70,7 @@ function Stat({
   value,
   sub,
   tone,
+  variant = "sand",
   href,
   delay,
 }: {
@@ -77,19 +78,20 @@ function Stat({
   value: string;
   sub: string;
   tone: keyof typeof TONES | "warn";
+  variant?: "sand" | "ice" | "alert";
   href: string;
   delay: number;
 }) {
+  const variantClass =
+    variant === "ice" ? "stat-ice" : variant === "alert" ? "stat-alert" : "stat-sand";
   const skin = tone === "warn" ? { bg: "var(--danger-soft)", fg: "var(--danger)" } : TONES[tone];
   return (
-    <Link href={href} className="stat anim-up" style={{ "--d": `${delay}ms` } as React.CSSProperties}>
+    <Link href={href} className={`stat ${variantClass} anim-up`} style={{ "--d": `${delay}ms` } as React.CSSProperties}>
       <span className="tile-icon" style={{ background: skin.bg, color: skin.fg }}>
         {label === "Overdue" ? <IconReturns /> : <IconMonths />}
       </span>
       <div className="stat-label mt-2.5">{label}</div>
-      <div className="stat-value" style={tone === "warn" ? { color: "var(--danger)" } : undefined}>
-        {value}
-      </div>
+      <div className="stat-value">{value}</div>
       <div className="stat-sub">{sub}</div>
     </Link>
   );
@@ -100,24 +102,24 @@ function Deadline({ d }: { d: { state: string; taxType: string; period: string; 
   return (
     <Link
       href={`/months/${d.period.length === 7 ? d.period : d.period.slice(0, 4) + "-01"}/${d.state}`}
-      className="flex items-center gap-3 border-b border-[var(--line)] px-4 py-3 last:border-0 hover:bg-[#f9fafd]"
+      className="flex items-center gap-3 border-b border-[var(--line)] px-4 py-3.5 last:border-0 hover:bg-black/5"
     >
-      <span className={`badge ${late ? "badge-overdue" : "badge-ready"}`}>{d.state}</span>
+      <span className={`state-stamp ${late ? "state-stamp-red" : "state-stamp-slate"}`}>{d.state}</span>
       <span className="min-w-0">
-        <span className="block text-[12.5px] font-medium">
+        <span className="block text-[13px] font-semibold text-[var(--ink)]">
           {stateName(d.state)} · {d.taxType}
         </span>
-        <span className="block text-[11px] text-[var(--muted)]">
+        <span className="block text-[11.5px] text-[var(--muted)]">
           {d.period} · due {d.dueDate}
         </span>
       </span>
       <span className="ml-auto text-right">
         <span
-          className={`block text-[12.5px] font-semibold tnum ${late ? "text-[var(--danger)]" : ""}`}
+          className={`block text-[13px] font-bold tnum ${late ? "text-[var(--red-pop)]" : "text-[var(--ink)]"}`}
         >
           {d.amount !== null ? fmtMoney(d.amount) : "—"}
         </span>
-        <span className="block text-[11px] text-[var(--muted)]">
+        <span className={`block text-[11px] font-medium ${late ? "text-[var(--red-pop)]" : "text-[var(--muted)]"}`}>
           {late ? `${Math.abs(d.days)}d late` : d.days === 0 ? "today" : `in ${d.days}d`}
         </span>
       </span>
@@ -143,7 +145,7 @@ export default async function DashboardPage() {
           </div>
           {latestMonth && (
             <div className="pagehead-actions">
-              <a className="btn" href={`/api/period-workbook/${latestMonth}`}>
+              <a className="btn btn-pill-outline" href={`/api/period-workbook/${latestMonth}`}>
                 Download workbook
               </a>
               <Link className="btn btn-primary" href={`/months/${latestMonth}`}>
@@ -155,22 +157,15 @@ export default async function DashboardPage() {
       </div>
 
       {/* ---- headline numbers ---- */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3.5 lg:grid-cols-4">
         <Stat
           label="Latest month"
           value={d.latest ? fmtMoney(d.latest.totalTax) : "—"}
           sub={d.latest ? `${periodLabel(d.latest.month)} · ${d.latest.states} states` : "nothing computed"}
           tone="violet"
+          variant="sand"
           href={latestMonth ? `/months/${latestMonth}` : "/months"}
           delay={0}
-        />
-        <Stat
-          label="Overdue"
-          value={d.overdueCount.toLocaleString()}
-          sub={d.overdueCount ? "returns past their due date" : "nothing outstanding"}
-          tone={d.overdueCount ? "warn" : "green"}
-          href="/returns?tab=overdue"
-          delay={60}
         />
         <Stat
           label="Months stored"
@@ -181,14 +176,25 @@ export default async function DashboardPage() {
               : "all months computed"
           }
           tone="blue"
+          variant="ice"
           href="/months"
+          delay={60}
+        />
+        <Stat
+          label="Overdue"
+          value={d.overdueCount.toLocaleString()}
+          sub={d.overdueCount ? "returns past their due date" : "nothing outstanding"}
+          tone="warn"
+          variant="alert"
+          href="/returns?tab=overdue"
           delay={120}
         />
         <Stat
           label="SKUs missing cost"
           value={d.gaps.noCost.toLocaleString()}
           sub={d.gaps.noCost ? "excise is understated" : "nothing outstanding"}
-          tone={d.gaps.noCost ? "amber" : "green"}
+          tone="amber"
+          variant={d.gaps.noCost ? "alert" : "sand"}
           href="/products?tab=cost"
           delay={180}
         />
@@ -280,10 +286,10 @@ export default async function DashboardPage() {
 
       {/* ---- deadlines + months ---- */}
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-        <section className="panel overflow-hidden">
+        <section className="panel panel-ice overflow-hidden">
           <div className="panel-head">
             {d.overdue.length ? "Overdue" : "Coming up"}
-            <Link href="/returns" className="ml-auto text-[12px] font-normal text-[var(--accent)]">
+            <Link href="/returns" className="ml-auto text-[12px] font-bold text-[var(--red-pop)] hover:underline">
               all returns →
             </Link>
           </div>
@@ -298,10 +304,10 @@ export default async function DashboardPage() {
           )}
         </section>
 
-        <section className="panel overflow-hidden">
+        <section className="panel panel-sand overflow-hidden">
           <div className="panel-head">
             Recent months
-            <Link href="/months" className="ml-auto text-[12px] font-normal text-[var(--accent)]">
+            <Link href="/months" className="ml-auto text-[12px] font-bold text-[var(--red-pop)] hover:underline">
               all months →
             </Link>
           </div>
@@ -309,17 +315,17 @@ export default async function DashboardPage() {
             <Link
               key={m.month}
               href={`/months/${m.month}`}
-              className="flex items-center gap-3 border-b border-[var(--line)] px-4 py-3 last:border-0 hover:bg-[#f9fafd]"
+              className="flex items-center gap-3 border-b border-[var(--line)] px-4 py-3.5 last:border-0 hover:bg-black/5"
             >
               <span className="min-w-0">
-                <span className="block text-[12.5px] font-semibold">{periodLabel(m.month)}</span>
-                <span className="block text-[11px] text-[var(--muted)]">
+                <span className="block text-[13px] font-semibold text-[var(--ink)]">{periodLabel(m.month)}</span>
+                <span className="block text-[11.5px] text-[var(--muted)]">
                   {m.states} states · {m.status}
                 </span>
               </span>
               <span className="ml-auto flex items-center gap-2.5">
                 {m.warnings > 0 && <span className="badge badge-not_started">{m.warnings}</span>}
-                <span className="text-[13px] font-semibold tnum">{fmtMoney(m.totalTax)}</span>
+                <span className="text-[13px] font-bold tnum text-[var(--ink)]">{fmtMoney(m.totalTax)}</span>
               </span>
             </Link>
           ))}
