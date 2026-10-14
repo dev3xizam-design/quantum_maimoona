@@ -4,7 +4,6 @@ import { fmtMoney } from "@/lib/money";
 import { periodLabel } from "@/lib/periods";
 import { stateName } from "@/lib/states";
 import {
-  IconAudit,
   IconCalendar,
   IconConfig,
   IconGuide,
@@ -13,101 +12,156 @@ import {
   IconProducts,
   IconReturns,
   IconUpload,
+  IconStores,
+  IconOrders,
 } from "@/components/icons";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Dashboard" };
+export const metadata = { title: "Dashboard — Quantum Tax Engine" };
 
-function QuickLink({
+function QuickNavTile({
   href,
   title,
   sub,
   icon,
-  delay,
   badge,
 }: {
   href: string;
   title: string;
   sub: string;
   icon: React.ReactNode;
-  delay: number;
   badge?: string;
 }) {
   return (
     <Link
       href={href}
-      className="tile anim-up"
-      style={{ "--d": `${delay}ms` } as React.CSSProperties}
+      className="group relative flex flex-col justify-between p-4 rounded-2xl bg-[#EAE5D8] border border-[rgba(26,9,5,0.1)] shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-md hover:border-[#4C050C]/30 hover:bg-[#F5F2EB]"
     >
-      <span className="flex items-center gap-2">
-        <span className="tile-icon">
+      <div className="flex items-center justify-between mb-3">
+        <span className="w-9 h-9 rounded-xl flex items-center justify-center bg-[rgba(26,9,5,0.06)] text-[#1A0905] transition-all duration-200 group-hover:bg-[#4C050C] group-hover:text-white group-hover:scale-105">
           {icon}
         </span>
-        {badge && <span className="badge badge-overdue ml-auto">{badge}</span>}
-      </span>
-      <span>
-        <span className="tile-title block">{title}</span>
-        <span className="tile-sub">{sub}</span>
-      </span>
+        {badge && (
+          <span className="px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-[#4C050C] text-white shadow-sm">
+            {badge}
+          </span>
+        )}
+      </div>
+      <div>
+        <div className="text-[13.5px] font-bold text-[#1A0905] group-hover:text-[#4C050C] transition-colors">
+          {title}
+        </div>
+        <div className="text-[11.5px] text-[#4E5D6C] mt-0.5 line-clamp-1">{sub}</div>
+      </div>
     </Link>
   );
 }
 
-function Stat({
-  label,
+function MetricCard({
+  title,
   value,
   sub,
-  variant = "sand",
+  tag,
+  variant = "cream",
   href,
-  delay,
 }: {
-  label: string;
+  title: string;
   value: string;
   sub: string;
-  variant?: "sand" | "ice" | "alert";
+  tag?: string;
+  variant?: "cream" | "ice" | "alert";
   href: string;
-  delay: number;
 }) {
-  const variantClass =
-    variant === "ice" ? "stat-ice" : variant === "alert" ? "stat-alert" : "stat-sand";
+  const bgStyles =
+    variant === "ice"
+      ? "bg-[#A4C0D4] border-[rgba(20,37,51,0.15)] text-[#142533]"
+      : variant === "alert"
+      ? "bg-[#F7F2EB] border-[#4C050C]/30 text-[#1A0905]"
+      : "bg-[#EAE5D8] border-[rgba(26,9,5,0.1)] text-[#1A0905]";
+
+  const subStyles =
+    variant === "ice"
+      ? "text-[#2D5270]"
+      : variant === "alert"
+      ? "text-[#8E0E1B]"
+      : "text-[#5C5440]";
+
   return (
-    <Link href={href} className={`stat ${variantClass} anim-up`} style={{ "--d": `${delay}ms` } as React.CSSProperties}>
-      <span className="tile-icon">
-        {label === "Overdue" ? <IconReturns /> : <IconMonths />}
-      </span>
-      <div className="stat-label mt-2.5">{label}</div>
-      <div className="stat-value">{value}</div>
-      <div className="stat-sub">{sub}</div>
+    <Link
+      href={href}
+      className={`group relative flex flex-col justify-between p-5 rounded-2xl border shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-lg ${bgStyles}`}
+    >
+      <div className="flex items-center justify-between">
+        <span className="text-[11px] font-extrabold tracking-wider uppercase opacity-75">
+          {title}
+        </span>
+        {tag && (
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-white/70 backdrop-blur-sm shadow-xs">
+            {tag}
+          </span>
+        )}
+      </div>
+      <div className="my-3">
+        <div className="text-[28px] font-extrabold tracking-tight font-sans leading-none">
+          {value}
+        </div>
+      </div>
+      <div className={`text-[12px] font-medium flex items-center justify-between ${subStyles}`}>
+        <span>{sub}</span>
+        <span className="text-[14px] transition-transform duration-200 group-hover:translate-x-1">
+          →
+        </span>
+      </div>
     </Link>
   );
 }
 
-function Deadline({ d }: { d: { state: string; taxType: string; period: string; dueDate: string; days: number; amount: number | null } }) {
+function DeadlineRow({
+  d,
+}: {
+  d: { state: string; taxType: string; period: string; dueDate: string; days: number; amount: number | null };
+}) {
   const late = d.days < 0;
   return (
     <Link
       href={`/months/${d.period.length === 7 ? d.period : d.period.slice(0, 4) + "-01"}/${d.state}`}
-      className="flex items-center gap-3 border-b border-[var(--line)] px-4 py-3.5 last:border-0 hover:bg-black/5"
+      className="group flex items-center gap-3.5 px-4 py-3 border-b border-[rgba(26,9,5,0.08)] last:border-0 hover:bg-black/[0.03] transition-colors"
     >
-      <span className={`state-stamp ${late ? "state-stamp-red" : "state-stamp-slate"}`}>{d.state}</span>
-      <span className="min-w-0">
-        <span className="block text-[13px] font-semibold text-[var(--ink)]">
-          {stateName(d.state)} · {d.taxType}
-        </span>
-        <span className="block text-[11.5px] text-[var(--muted)]">
-          {d.period} · due {d.dueDate}
-        </span>
+      <span
+        className={`w-7 h-7 rounded-full flex items-center justify-center text-[10.5px] font-extrabold tracking-wide shadow-xs ${
+          late ? "bg-[#4C050C] text-white" : "bg-[#3B6483] text-white"
+        }`}
+      >
+        {d.state}
       </span>
-      <span className="ml-auto text-right">
-        <span
-          className={`block text-[13px] font-bold tnum ${late ? "text-[var(--red-pop)]" : "text-[var(--ink)]"}`}
+      <div className="min-w-0 flex-1">
+        <div className="text-[13px] font-bold text-[#1A0905] group-hover:text-[#4C050C] transition-colors truncate">
+          {stateName(d.state)} · <span className="font-medium text-[#4E5D6C]">{d.taxType}</span>
+        </div>
+        <div className="text-[11.5px] text-[#4E5D6C]">
+          {d.period} · due {d.dueDate}
+        </div>
+      </div>
+      <div className="text-right flex-none">
+        <div
+          className={`text-[13px] font-extrabold tnum ${
+            late ? "text-[#4C050C]" : "text-[#1A0905]"
+          }`}
         >
           {d.amount !== null ? fmtMoney(d.amount) : "—"}
+        </div>
+        <span
+          className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold ${
+            late
+              ? "bg-[#4C050C]/10 text-[#4C050C]"
+              : d.days === 0
+              ? "bg-[#E3DFCE] text-[#1A0905]"
+              : "text-[#4E5D6C]"
+          }`}
+        >
+          {late ? `${Math.abs(d.days)}d late` : d.days === 0 ? "due today" : `in ${d.days}d`}
         </span>
-        <span className={`block text-[11px] font-medium ${late ? "text-[var(--red-pop)]" : "text-[var(--muted)]"}`}>
-          {late ? `${Math.abs(d.days)}d late` : d.days === 0 ? "today" : `in ${d.days}d`}
-        </span>
-      </span>
+      </div>
     </Link>
   );
 }
@@ -117,255 +171,346 @@ export default async function DashboardPage() {
   const latestMonth = d.latest?.month;
 
   return (
-    <div className="space-y-5">
-      <div className="pagehead">
-        <div className="pagehead-row">
-          <div>
-            <h1 className="page-title">Dashboard</h1>
-            <p className="page-sub mt-0.5">
-              {d.latest
-                ? `${periodLabel(d.latest.month)} is your most recent month. Everything below links straight to where the work is.`
-                : "Upload an Avalara export to get started — everything else follows from it."}
-            </p>
+    <div className="space-y-6">
+      {/* Top Executive Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse" />
+            <span className="text-[11.5px] font-bold tracking-wide uppercase text-[#4E5D6C]">
+              14 State Tax Engines Operational
+            </span>
           </div>
-          {latestMonth && (
-            <div className="pagehead-actions">
-              <a className="btn btn-pill-outline" href={`/api/period-workbook/${latestMonth}`}>
-                Download workbook
-              </a>
-              <Link className="btn btn-primary" href={`/months/${latestMonth}`}>
-                Open {periodLabel(latestMonth)}
-              </Link>
-            </div>
-          )}
+          <h1 className="text-[30px] font-extrabold tracking-tight text-[#1A0905]">
+            Tax Automation Dashboard
+          </h1>
+          <p className="text-[13.5px] text-[#4E5D6C] max-w-2xl mt-0.5">
+            {d.latest
+              ? `Active computation period: ${periodLabel(d.latest.month)} across ${d.latest.states} state jurisdictions.`
+              : "Upload your sales export to initialize the multi-state excise calculation engine."}
+          </p>
         </div>
+
+        {latestMonth && (
+          <div className="flex items-center gap-2.5 flex-none">
+            <a
+              href={`/api/period-workbook/${latestMonth}`}
+              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-[12.5px] font-bold bg-[#EAE5D8] border border-[rgba(26,9,5,0.12)] text-[#1A0905] shadow-xs hover:bg-[#F5F2EB] hover:shadow-sm transition-all"
+            >
+              <span>Download Workbook</span>
+            </a>
+            <Link
+              href={`/months/${latestMonth}`}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-[12.5px] font-bold bg-[#4C050C] text-white shadow-sm hover:bg-[#680A12] hover:shadow-md transition-all active:scale-95"
+            >
+              <span>Open {periodLabel(latestMonth)}</span>
+              <span>→</span>
+            </Link>
+          </div>
+        )}
       </div>
 
-      {/* ---- headline numbers ---- */}
-      <div className="grid grid-cols-2 gap-3.5 lg:grid-cols-4">
-        <Stat
-          label="Latest month"
+      {/* 4 Core Financial Metrics */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <MetricCard
+          title="Latest Month Tax"
           value={d.latest ? fmtMoney(d.latest.totalTax) : "—"}
-          sub={d.latest ? `${periodLabel(d.latest.month)} · ${d.latest.states} states` : "nothing computed"}
-          variant="sand"
+          sub={d.latest ? `${periodLabel(d.latest.month)} · ${d.latest.states} States` : "No period ready"}
+          tag={d.latest?.status || "Active"}
+          variant="cream"
           href={latestMonth ? `/months/${latestMonth}` : "/months"}
-          delay={0}
         />
-        <Stat
-          label="Months stored"
+        <MetricCard
+          title="Filing Months"
           value={`${d.monthsComputed} / ${d.monthsWithData}`}
           sub={
             d.monthsWithData > d.monthsComputed
-              ? `${d.monthsWithData - d.monthsComputed} not computed yet`
-              : "all months computed"
+              ? `${d.monthsWithData - d.monthsComputed} pending computation`
+              : "All monthly returns computed"
           }
           variant="ice"
           href="/months"
-          delay={60}
         />
-        <Stat
-          label="Overdue"
+        <MetricCard
+          title="Overdue Filings"
           value={d.overdueCount.toLocaleString()}
-          sub={d.overdueCount ? "returns past their due date" : "nothing outstanding"}
-          variant="alert"
+          sub={d.overdueCount ? "Past due state returns" : "Zero overdue filings"}
+          tag={d.overdueCount > 0 ? "Attention Required" : "Compliant"}
+          variant={d.overdueCount > 0 ? "alert" : "cream"}
           href="/returns?tab=overdue"
-          delay={120}
         />
-        <Stat
-          label="SKUs missing cost"
+        <MetricCard
+          title="SKUs Missing Cost"
           value={d.gaps.noCost.toLocaleString()}
-          sub={d.gaps.noCost ? "excise is understated" : "nothing outstanding"}
-          variant={d.gaps.noCost ? "alert" : "sand"}
+          sub={d.gaps.noCost ? "Excise basis understated" : "Full SKU compliance"}
+          variant={d.gaps.noCost > 0 ? "alert" : "cream"}
           href="/products?tab=cost"
-          delay={180}
         />
       </div>
 
-      {/* ---- quick links ---- */}
-      <section>
-        <h2 className="mb-3 text-[12px] font-bold uppercase tracking-[0.08em] text-[var(--muted)]">
-          Jump to
+      {/* Primary Split View: Deadlines & Recent Months */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        {/* Upcoming State Deadlines */}
+        <div className="flex flex-col rounded-2xl bg-[#EAE5D8] border border-[rgba(26,9,5,0.1)] shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-3.5 border-b border-[rgba(26,9,5,0.08)] bg-black/[0.02]">
+            <div className="flex items-center gap-2">
+              <span className="font-extrabold text-[14px] text-[#1A0905]">
+                {d.overdue.length ? "Action Required: Overdue & Upcoming" : "Upcoming Filing Deadlines"}
+              </span>
+              <span className="px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-[#A4C0D4] text-[#142533]">
+                {(d.overdue.length ? d.overdue : d.upcoming).length}
+              </span>
+            </div>
+            <Link
+              href="/returns"
+              className="text-[12px] font-bold text-[#4C050C] hover:underline"
+            >
+              All returns →
+            </Link>
+          </div>
+
+          <div className="divide-y divide-[rgba(26,9,5,0.06)] flex-1 overflow-y-auto max-h-[380px]">
+            {(d.overdue.length ? d.overdue : d.upcoming).map((x, i) => (
+              <DeadlineRow key={`${x.state}${x.taxType}${x.period}${i}`} d={x} />
+            ))}
+            {d.overdue.length === 0 && d.upcoming.length === 0 && (
+              <div className="p-8 text-center text-[#4E5D6C]">
+                <div className="font-bold text-[14px] text-[#1A0905]">All State Filings Current</div>
+                <div className="text-[12px] mt-1">No pending state tax deadlines for computed periods.</div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Recent Monthly Calculations */}
+        <div className="flex flex-col rounded-2xl bg-[#EAE5D8] border border-[rgba(26,9,5,0.1)] shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-3.5 border-b border-[rgba(26,9,5,0.08)] bg-black/[0.02]">
+            <div className="flex items-center gap-2">
+              <span className="font-extrabold text-[14px] text-[#1A0905]">Recent Filing Months</span>
+              <span className="px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-[#A4C0D4] text-[#142533]">
+                {d.months.length}
+              </span>
+            </div>
+            <Link href="/months" className="text-[12px] font-bold text-[#4C050C] hover:underline">
+              View all months →
+            </Link>
+          </div>
+
+          <div className="divide-y divide-[rgba(26,9,5,0.06)] flex-1 overflow-y-auto max-h-[380px]">
+            {d.months.map((m) => (
+              <Link
+                key={m.month}
+                href={`/months/${m.month}`}
+                className="group flex items-center justify-between px-5 py-3.5 hover:bg-black/[0.03] transition-colors"
+              >
+                <div>
+                  <div className="text-[13.5px] font-bold text-[#1A0905] group-hover:text-[#4C050C] transition-colors">
+                    {periodLabel(m.month)}
+                  </div>
+                  <div className="text-[11.5px] text-[#4E5D6C] mt-0.5">
+                    {m.states} States · <span className="capitalize">{m.status}</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  {m.warnings > 0 && (
+                    <span className="px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-[#4C050C]/10 text-[#4C050C]">
+                      {m.warnings} warnings
+                    </span>
+                  )}
+                  <span className="text-[13.5px] font-extrabold tnum text-[#1A0905]">
+                    {fmtMoney(m.totalTax)}
+                  </span>
+                  <span className="text-[13px] text-[#4E5D6C] group-hover:translate-x-0.5 transition-transform">
+                    →
+                  </span>
+                </div>
+              </Link>
+            ))}
+            {d.months.length === 0 && (
+              <div className="p-8 text-center text-[#4E5D6C]">
+                <div className="font-bold text-[14px] text-[#1A0905]">No Months Computed</div>
+                <div className="text-[12px] mt-1">Upload an Avalara or Shopify report to generate calculations.</div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Compliance Stream: Data Gaps, PACT Stream & Upload History */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+        {/* 1. Missing Data Gaps */}
+        <div className="p-5 rounded-2xl bg-[#EAE5D8] border border-[rgba(26,9,5,0.1)] shadow-sm flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-[13.5px] font-extrabold text-[#1A0905]">Data Gaps</span>
+              <span className="text-[11px] font-bold text-[#4E5D6C]">Catalog Health</span>
+            </div>
+            <div className="space-y-2.5 text-[12.5px]">
+              {[
+                { n: d.gaps.noCost, label: "SKUs missing wholesale cost", href: "/products?tab=cost" },
+                { n: d.gaps.noMl, label: "SKUs missing mL volume", href: "/products?tab=ml" },
+                { n: d.gaps.noSystem, label: "SKUs missing open/closed classification", href: "/products?tab=system" },
+              ].map((row) => (
+                <Link
+                  key={row.label}
+                  href={row.href}
+                  className="flex items-center justify-between p-2 rounded-xl hover:bg-black/[0.04] transition-colors"
+                >
+                  <span className="text-[#4E5D6C]">{row.label}</span>
+                  <span
+                    className={`font-extrabold tnum ${
+                      row.n > 0 ? "text-[#4C050C]" : "text-emerald-700"
+                    }`}
+                  >
+                    {row.n.toLocaleString()}
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </div>
+          {d.gaps.noCost > 0 && (
+            <div className="mt-4 pt-3 border-t border-[rgba(26,9,5,0.08)] text-[11px] text-[#4E5D6C]">
+              Wholesale excise calculations remain estimated until costs are imported.
+            </div>
+          )}
+        </div>
+
+        {/* 2. PACT Compliance Feed */}
+        <div className="p-5 rounded-2xl bg-[#EAE5D8] border border-[rgba(26,9,5,0.1)] shadow-sm flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-[13.5px] font-extrabold text-[#1A0905]">PACT Compliance Feed</span>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#A4C0D4] text-[#142533]">
+                {d.stores.connected} Stores Active
+              </span>
+            </div>
+            <div className="my-2">
+              <div className="text-[28px] font-extrabold tnum text-[#1A0905]">
+                {d.pactRows.toLocaleString()}
+              </div>
+              <div className="text-[11.5px] text-[#4E5D6C]">Compliant shipment records synced</div>
+            </div>
+            <p className="text-[11.5px] text-[#4E5D6C] mt-2 leading-relaxed">
+              Customer identity and delivery verification records gathered directly from connected store APIs.
+            </p>
+          </div>
+          <div className="mt-4 pt-3 border-t border-[rgba(26,9,5,0.08)]">
+            <Link
+              href="/config/stores"
+              className="inline-flex items-center justify-center w-full py-2 rounded-xl text-[12px] font-bold bg-[#A4C0D4] text-[#142533] hover:bg-[#92b0c6] transition-colors"
+            >
+              Configure Store Connections →
+            </Link>
+          </div>
+        </div>
+
+        {/* 3. Recent File Imports */}
+        <div className="p-5 rounded-2xl bg-[#EAE5D8] border border-[rgba(26,9,5,0.1)] shadow-sm flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-[13.5px] font-extrabold text-[#1A0905]">Recent Data Imports</span>
+              <Link href="/upload/history" className="text-[11px] font-bold text-[#4C050C] hover:underline">
+                Audit history →
+              </Link>
+            </div>
+            <div className="space-y-2 divide-y divide-[rgba(26,9,5,0.06)]">
+              {d.uploads.slice(0, 3).map((u, i) => (
+                <div key={i} className="pt-2 first:pt-0">
+                  <div className="text-[12px] font-bold text-[#1A0905] truncate">{u.filename}</div>
+                  <div className="text-[10.5px] text-[#4E5D6C] mt-0.5">
+                    {u.kind} · {u.rows.toLocaleString()} rows · {u.when}
+                  </div>
+                </div>
+              ))}
+              {d.uploads.length === 0 && (
+                <div className="text-[12px] text-[#4E5D6C] py-4 text-center">
+                  No previous imports logged.
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="mt-4 pt-3 border-t border-[rgba(26,9,5,0.08)]">
+            <Link
+              href="/upload"
+              className="inline-flex items-center justify-center w-full py-2 rounded-xl text-[12px] font-bold bg-[#E3DFCE] text-[#1A0905] border border-[rgba(26,9,5,0.12)] hover:bg-[#d8d3c0] transition-colors"
+            >
+              Upload New CSV Report →
+            </Link>
+          </div>
+        </div>
+      </div>
+
+      {/* Quick Access Navigation Rail ("Jump To") */}
+      <section className="pt-2">
+        <h2 className="text-[12px] font-extrabold uppercase tracking-wider text-[#4E5D6C] mb-3">
+          Quick Access Hub
         </h2>
-        <div className="tilegrid">
-          <QuickLink
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
+          <QuickNavTile
             href="/months"
-            title="Months"
-            sub="Every month, state by state"
+            title="Tax Months"
+            sub="State-by-state calculations"
             icon={<IconMonths />}
-            delay={0}
-            badge={d.monthsWithData > d.monthsComputed ? `${d.monthsWithData - d.monthsComputed} to compute` : undefined}
+            badge={d.monthsWithData > d.monthsComputed ? `${d.monthsWithData - d.monthsComputed} pending` : undefined}
           />
-          <QuickLink
+          <QuickNavTile
             href="/upload"
-            title="Upload"
-            sub="Avalara export, purchases, Shopify"
+            title="Upload Data"
+            sub="Avalara, Shopify & CSVs"
             icon={<IconUpload />}
-            delay={50}
           />
-          <QuickLink
+          <QuickNavTile
             href="/products"
-            title="Products"
-            sub={`${d.gaps.soldSkus.toLocaleString()} SKUs have sold`}
+            title="Products & SKUs"
+            sub={`${d.gaps.soldSkus.toLocaleString()} products active`}
             icon={<IconProducts />}
-            delay={100}
-            badge={d.gaps.noCost ? `${d.gaps.noCost} need cost` : undefined}
+            badge={d.gaps.noCost > 0 ? `${d.gaps.noCost} uncosted` : undefined}
           />
-          <QuickLink
+          <QuickNavTile
             href="/returns"
-            title="Returns"
-            sub="Every computed return"
+            title="State Returns"
+            sub="Computed tax liabilities"
             icon={<IconReturns />}
-            delay={150}
-            badge={d.overdueCount ? `${d.overdueCount} overdue` : undefined}
+            badge={d.overdueCount > 0 ? `${d.overdueCount} overdue` : undefined}
           />
-          <QuickLink
+          <QuickNavTile
             href="/calendar"
-            title="Calendar"
-            sub="What is due, and when"
+            title="Filing Calendar"
+            sub="Deadlines & schedules"
             icon={<IconCalendar />}
-            delay={200}
           />
-          <QuickLink
+          <QuickNavTile
             href="/portals"
-            title="Portals"
-            sub={`${d.portals.withLink} state logins, one click away`}
+            title="State Portals"
+            sub={`${d.portals.withLink} official state logins`}
             icon={<IconPortals />}
-            delay={250}
           />
-          <QuickLink
+          <QuickNavTile
             href="/config/stores"
-            title="Stores"
+            title="Store Feeds"
             sub={`${d.stores.connected} of ${d.stores.total} connected`}
-            icon={<IconConfig />}
-            delay={300}
+            icon={<IconStores />}
           />
-          <QuickLink
+          <QuickNavTile
             href="/config"
-            title="Rates & rules"
-            sub="Editable, effective-dated"
+            title="Rates & Rules"
+            sub="Excise basis & effective dates"
             icon={<IconConfig />}
-            delay={350}
           />
-          <QuickLink
+          <QuickNavTile
+            href="/orders"
+            title="Orders Feed"
+            sub="Transaction line items"
+            icon={<IconOrders />}
+          />
+          <QuickNavTile
             href="/guide"
-            title="Guide"
-            sub="How the whole system works"
+            title="Knowledge Guide"
+            sub="System rules & state nexus"
             icon={<IconGuide />}
-            delay={400}
           />
         </div>
       </section>
-
-      {/* ---- deadlines + months ---- */}
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-        <section className="panel panel-ice overflow-hidden">
-          <div className="panel-head">
-            {d.overdue.length ? "Overdue" : "Coming up"}
-            <Link href="/returns" className="ml-auto text-[12px] font-bold text-[var(--red-pop)] hover:underline">
-              all returns →
-            </Link>
-          </div>
-          {(d.overdue.length ? d.overdue : d.upcoming).map((x, i) => (
-            <Deadline key={`${x.state}${x.taxType}${x.period}${i}`} d={x} />
-          ))}
-          {d.overdue.length === 0 && d.upcoming.length === 0 && (
-            <div className="empty">
-              <strong>Nothing due.</strong>
-              <span>Every computed return has been filed.</span>
-            </div>
-          )}
-        </section>
-
-        <section className="panel panel-sand overflow-hidden">
-          <div className="panel-head">
-            Recent months
-            <Link href="/months" className="ml-auto text-[12px] font-bold text-[var(--red-pop)] hover:underline">
-              all months →
-            </Link>
-          </div>
-          {d.months.map((m) => (
-            <Link
-              key={m.month}
-              href={`/months/${m.month}`}
-              className="flex items-center gap-3 border-b border-[var(--line)] px-4 py-3.5 last:border-0 hover:bg-black/5"
-            >
-              <span className="min-w-0">
-                <span className="block text-[13px] font-semibold text-[var(--ink)]">{periodLabel(m.month)}</span>
-                <span className="block text-[11.5px] text-[var(--muted)]">
-                  {m.states} states · {m.status}
-                </span>
-              </span>
-              <span className="ml-auto flex items-center gap-2.5">
-                {m.warnings > 0 && <span className="badge badge-not_started">{m.warnings}</span>}
-                <span className="text-[13px] font-bold tnum text-[var(--ink)]">{fmtMoney(m.totalTax)}</span>
-              </span>
-            </Link>
-          ))}
-          {d.months.length === 0 && (
-            <div className="empty">
-              <strong>No months computed yet.</strong>
-              <span>Upload an export, then open the month.</span>
-            </div>
-          )}
-        </section>
-      </div>
-
-      {/* ---- what is holding things up ---- */}
-      <div className="grid gap-4 lg:grid-cols-3">
-        <section className="panel p-5">
-          <h3 className="text-[13.5px] font-semibold">Data still needed</h3>
-          <div className="mt-3 space-y-2 text-[12.5px]">
-            {[
-              { n: d.gaps.noCost, label: "SKUs with no wholesale cost", href: "/products?tab=cost" },
-              { n: d.gaps.noMl, label: "SKUs with no mL", href: "/products?tab=ml" },
-              { n: d.gaps.noSystem, label: "SKUs with no open/closed", href: "/products?tab=system" },
-            ].map((row) => (
-              <Link key={row.label} href={row.href} className="flex items-center justify-between hover:opacity-80">
-                <span className="text-[var(--muted)]">{row.label}</span>
-                <span className={`font-semibold tnum ${row.n ? "text-[var(--danger)]" : "text-[var(--ok)]"}`}>
-                  {row.n.toLocaleString()}
-                </span>
-              </Link>
-            ))}
-          </div>
-          {d.gaps.noCost > 0 && (
-            <p className="mt-3 text-[11.5px] text-[var(--muted)]">
-              Percentage-of-wholesale excise stays understated until cost is loaded.
-            </p>
-          )}
-        </section>
-
-        <section className="panel p-5">
-          <h3 className="text-[13.5px] font-semibold">PACT feed</h3>
-          <div className="mt-2 text-[26px] font-bold tnum">{d.pactRows.toLocaleString()}</div>
-          <p className="text-[12px] text-[var(--muted)]">shipment lines stored</p>
-          <p className="mt-3 text-[11.5px] text-[var(--muted)]">
-            PACT needs the customer name and address, which a sales-tax export does not carry. It
-            comes from your stores&rsquo; orders.
-          </p>
-          <Link className="btn btn-sm mt-3" href="/config/stores">
-            Sync orders
-          </Link>
-        </section>
-
-        <section className="panel overflow-hidden">
-          <div className="panel-head">
-            Recent uploads
-            <Link href="/upload/history" className="ml-auto text-[12px] font-normal text-[var(--accent)]">
-              history →
-            </Link>
-          </div>
-          {d.uploads.map((u, i) => (
-            <div key={i} className="border-b border-[var(--line)] px-4 py-2.5 last:border-0">
-              <div className="truncate text-[12.5px] font-medium">{u.filename}</div>
-              <div className="text-[11px] text-[var(--muted)]">
-                {u.kind} · {u.rows.toLocaleString()} rows · {u.when}
-              </div>
-            </div>
-          ))}
-          {d.uploads.length === 0 && <div className="empty">Nothing uploaded yet.</div>}
-        </section>
-      </div>
     </div>
   );
 }

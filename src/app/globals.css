@@ -44,9 +44,9 @@
   --sand-100: #eae5d8;
   --sand-50:  #f5f1e8;
 
-  /* Dark Roasted Espresso Dock Sidebar (#1A0905 from brand swatch) */
-  --dock-bg: #1A0905;
-  --dock-border: rgba(227, 223, 206, 0.08);
+  /* Luxury Salted Cream Dock Sidebar (#EAE5D8 / #E3DFCE from brand swatch) */
+  --dock-bg: #eae5d8;
+  --dock-border: rgba(26, 9, 5, 0.1);
 
   /* Modern Ambient Atmosphere */
   --bg: #dce6ee;         /* Ice Melt canvas backdrop */
@@ -60,10 +60,10 @@
   --line: rgba(26, 9, 5, 0.12); /* Subtle organic border */
   --line-strong: rgba(26, 9, 5, 0.22);
 
-  --accent: #9e0d1b;     /* The popping red */
-  --accent-soft: rgba(158, 13, 27, 0.1);
+  --accent: #4c050c;     /* Merlot Red Accent */
+  --accent-soft: rgba(76, 5, 12, 0.1);
 
-  --danger: #9e0d1b;     /* Vivid Red Pop */
+  --danger: #4c050c;     /* Merlot Red Pop */
   --danger-soft: #fcedef;
   --danger-line: #f6c8ce;
   --warn: #944b0c;
@@ -102,7 +102,7 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-::selection { background: var(--red-pop); color: #ffffff; }
+::selection { background: var(--merlot); color: #ffffff; }
 a { color: inherit; text-decoration: none; }
 
 /* ---------------------------------------------------------------- */
@@ -115,13 +115,13 @@ a { color: inherit; text-decoration: none; }
   min-height: 100vh;
 }
 
-/* Antigravity IDE / Mobbin Icon Rail Dock */
+/* Antigravity IDE / Mobbin Icon Rail Dock (Luxury Light Theme) */
 .sidebar-dock {
   position: sticky; top: 0; align-self: start; height: 100vh;
   display: flex; flex-direction: column; align-items: center;
   width: 70px;
   background: var(--dock-bg);
-  color: #fff;
+  color: var(--ink);
   border-right: 1px solid var(--dock-border);
   z-index: 50;
   padding: 14px 0 12px;
@@ -136,7 +136,7 @@ a { color: inherit; text-decoration: none; }
 .dock-divider {
   width: 28px;
   height: 1px;
-  background: rgba(227, 223, 206, 0.12);
+  background: rgba(26, 9, 5, 0.12);
   margin: 6px 0;
 }
 
@@ -150,22 +150,22 @@ a { color: inherit; text-decoration: none; }
   cursor: pointer;
 }
 
-/* Inactive Icon: Ice Melt Blue (#94B1C8) monochrome, hover reveals subtle glow */
+/* Inactive Icon: Slate Monochrome (#4E5D6C), hover reveals subtle pill */
 .dock-btn-inactive {
-  color: #94b1c8;
+  color: #4e5d6c;
   background: transparent;
 }
 .dock-btn-inactive:hover {
-  color: #ffffff;
-  background: rgba(227, 223, 206, 0.1);
+  color: #1a0905;
+  background: rgba(26, 9, 5, 0.08);
   transform: scale(1.06);
 }
 
-/* Active Icon: The RED highlight on selected option! */
+/* Active Icon: The Bold Red Highlight on selected option! */
 .dock-btn-active {
-  background: #9e0d1b;
+  background: #4c050c;
   color: #ffffff !important;
-  box-shadow: 0 4px 18px rgba(158, 13, 27, 0.45);
+  box-shadow: 0 4px 18px rgba(76, 5, 12, 0.38);
   transform: scale(1.05);
 }
 .dock-btn-active svg {
@@ -178,9 +178,9 @@ a { color: inherit; text-decoration: none; }
   top: 9px; right: 9px;
   width: 7px; height: 7px;
   border-radius: 999px;
-  background: #ff4d5e;
-  border: 1.5px solid #1A0905;
-  box-shadow: 0 0 8px rgba(255, 77, 94, 0.9);
+  background: #4c050c;
+  border: 1.5px solid #eae5d8;
+  box-shadow: 0 0 6px rgba(76, 5, 12, 0.8);
 }
 
 /* Antigravity / Mobbin Floating Tooltip on Hover */
@@ -189,9 +189,9 @@ a { color: inherit; text-decoration: none; }
   left: 100%;
   top: 50%;
   transform: translateY(-50%) translateX(6px);
-  background: #181d24;
-  color: #ffffff;
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: #1a0905;
+  color: #e3dfce;
+  border: 1px solid rgba(227, 223, 206, 0.18);
   padding: 6px 12px;
   border-radius: 8px;
   font-size: 11.5px;
@@ -199,7 +199,7 @@ a { color: inherit; text-decoration: none; }
   white-space: nowrap;
   pointer-events: none;
   opacity: 0;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 8px 24px rgba(26, 9, 5, 0.3);
   transition: opacity 0.15s cubic-bezier(0.16, 1, 0.3, 1), transform 0.15s cubic-bezier(0.16, 1, 0.3, 1);
   z-index: 100;
   display: flex;
@@ -214,14 +214,14 @@ a { color: inherit; text-decoration: none; }
   transform: translateY(-50%);
   border-width: 4px;
   border-style: solid;
-  border-color: transparent #181d24 transparent transparent;
+  border-color: transparent #1a0905 transparent transparent;
 }
 .group\/item:hover .dock-tooltip {
   opacity: 1;
   transform: translateY(-50%) translateX(14px);
 }
 .dock-tooltip-badge {
-  background: var(--red-pop);
+  background: #4c050c;
   color: #fff;
   border-radius: 999px;
   padding: 1px 6px;
@@ -234,15 +234,17 @@ a { color: inherit; text-decoration: none; }
   width: 36px; height: 36px;
   border-radius: 12px;
   display: flex; align-items: center; justify-content: center;
-  background: rgba(255, 255, 255, 0.12);
-  color: #ffffff;
+  background: rgba(76, 5, 12, 0.1);
+  color: #4c050c;
   font-size: 12px;
   font-weight: 800;
   cursor: pointer;
   transition: all 0.18s ease;
+  border: 1px solid rgba(76, 5, 12, 0.2);
 }
 .dock-avatar:hover {
-  background: var(--red-pop);
+  background: #4c050c;
+  color: #ffffff;
   transform: scale(1.06);
 }
 
@@ -255,9 +257,9 @@ a { color: inherit; text-decoration: none; }
   .mobilebar {
     display: flex; align-items: center; gap: 10px;
     padding: 12px 16px;
-    background: #111418;
-    color: #fff; position: sticky; top: 0; z-index: 40;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    background: #eae5d8;
+    color: #111418; position: sticky; top: 0; z-index: 40;
+    border-bottom: 1px solid rgba(26, 9, 5, 0.1);
   }
 }
 
