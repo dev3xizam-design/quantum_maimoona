@@ -1,4 +1,4 @@
-# Multi-State Tax Automation — Maximum Vapor Inc.
+# Multi-State Tax Automation — Maximum Vapor Inc
 
 Upload the period's Avalara export, and the system produces **filled, ready-to-file
 worksheets** — one per state per tax type — for sales/use tax, vapor excise and PACT Act
