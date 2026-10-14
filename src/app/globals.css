@@ -669,17 +669,18 @@ details > summary { list-style: none; }
 
 /* Portal directory & Cards */
 .portalgrid {
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
-  gap: 14px; align-items: start;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 14px; align-items: stretch;
 }
 
 .portalcard {
-  display: flex; flex-direction: column; gap: 10px;
+  display: flex; flex-direction: column; justify-content: space-between;
+  min-height: 230px;
   border: 1px solid var(--line); border-radius: 16px; background: #eae5d8;
-  padding: 15px; box-shadow: var(--shadow-sm);
+  padding: 16px; box-shadow: var(--shadow-sm);
   transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease, border-color 0.2s ease;
 }
-.portalcard:hover { transform: translateY(-3px); box-shadow: var(--shadow-md); border-color: rgba(158, 13, 27, 0.3); }
+.portalcard:hover { transform: translateY(-3px); box-shadow: var(--shadow-md); border-color: rgba(76, 5, 12, 0.3); }
 .portalcard[data-status="blocked"] { border-left: 4px solid var(--red-pop); }
 .portalcard[data-status="needs_license"] { border-left: 4px solid var(--warn); }
 

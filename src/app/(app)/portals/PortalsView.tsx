@@ -470,23 +470,25 @@ export function PortalsView({ rows, fein }: { rows: PortalRow[]; fein: string })
             style={{ "--d": `${Math.min(i, 14) * 35}ms` } as React.CSSProperties}
             data-status={r.status}
           >
-            <header className="portalcard-head">
-              <span className="badge badge-ready">{r.state}</span>
-              <span className="min-w-0">
-                <span className="portalcard-title">{r.label}</span>
-                <span className="portalcard-sub">
+            <header className="portalcard-head flex items-start gap-3">
+              <span className="badge badge-ready font-extrabold shrink-0 mt-0.5">{r.state}</span>
+              <div className="min-w-0 flex-1">
+                <div className="portalcard-title font-bold text-[14px] leading-snug text-[var(--ink)] line-clamp-1" title={r.label}>
+                  {r.label}
+                </div>
+                <div className="portalcard-sub text-[12px] font-medium text-[var(--muted)] mt-0.5">
                   {r.purpose ?? stateName(r.state)}
                   {r.frequency ? ` · ${r.frequency}` : ""}
-                </span>
-              </span>
+                </div>
+              </div>
               {r.status !== "active" && (
-                <span className={`badge ml-auto ${r.status === "blocked" ? "badge-overdue" : "badge-not_started"}`}>
+                <span className={`badge shrink-0 ${r.status === "blocked" ? "badge-overdue" : "badge-not_started"}`}>
                   {STATUS_LABEL[r.status] ?? r.status}
                 </span>
               )}
             </header>
 
-            <div className="portalcard-chips">
+            <div className="portalcard-chips flex flex-wrap gap-1.5 my-2">
               {r.loginId && <CopyChip label="Login ID" value={r.loginId} onCopied={flash} wide />}
               {r.licenseNumber && <CopyChip label="Licence" value={r.licenseNumber} onCopied={flash} wide />}
               <CopyChip label="FEIN" value={fein} onCopied={flash} />
@@ -494,9 +496,27 @@ export function PortalsView({ rows, fein }: { rows: PortalRow[]; fein: string })
 
             <SecretPanel row={r} onCopied={flash} />
 
-            {r.notes && <p className="portalcard-note">{r.notes}</p>}
+            {r.notes ? (
+              <details className="portalcard-notes group/notes text-[12px] relative mt-1">
+                <summary className="cursor-pointer select-none inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[rgba(26,9,5,0.05)] hover:bg-[rgba(26,9,5,0.1)] text-[var(--muted)] hover:text-[var(--ink)] font-semibold transition-colors">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                    <polyline points="14 2 14 8 20 8" />
+                    <line x1="16" y1="13" x2="8" y2="13" />
+                    <line x1="16" y1="17" x2="8" y2="17" />
+                  </svg>
+                  <span>Filing notes</span>
+                  <span className="text-[10px] opacity-60 group-open/notes:rotate-180 transition-transform">▾</span>
+                </summary>
+                <div className="mt-1.5 p-2.5 rounded-lg bg-[rgba(255,255,255,0.85)] border border-[rgba(26,9,5,0.1)] text-[12px] leading-relaxed text-[var(--ink-2)] max-h-[100px] overflow-y-auto shadow-xs">
+                  {r.notes}
+                </div>
+              </details>
+            ) : (
+              <div className="h-[28px]" />
+            )}
 
-            <footer className="portalcard-foot">
+            <footer className="portalcard-foot mt-auto pt-3 border-t border-[rgba(26,9,5,0.08)] flex items-center gap-2">
               {r.portalUrl ? (
                 <>
                   <a
@@ -520,7 +540,7 @@ export function PortalsView({ rows, fein }: { rows: PortalRow[]; fein: string })
               ) : (
                 <span className="text-[11.5px] text-[var(--muted)]">No portal link on file</span>
               )}
-              <details className="ml-auto">
+              <details className="ml-auto relative">
                 <summary className="btn btn-sm btn-ghost cursor-pointer list-none">Edit</summary>
                 <div className="portalcard-edit">
                   <form action={savePortal} className="space-y-3">
