@@ -115,7 +115,7 @@ export function Sidebar({
 
       {/* Desktop Antigravity / Mobbin Style Minimalist Icon Dock */}
       <aside className="sidebar-dock group/dock">
-        {/* Top: Pure Background-less Q Logo with Red & Cream Floating Tooltip */}
+        {/* Top: Pure Background-less Q Logo with Red & Ice Melt Blue Floating Tooltip */}
         <div className="dock-brand pt-2 relative group/item flex items-center justify-center w-full">
           <Link
             href="/"
@@ -125,7 +125,7 @@ export function Sidebar({
             <Logo size={36} />
           </Link>
           <div className="dock-tooltip dock-tooltip-brand">
-            <span className="font-extrabold text-[#E3DFCE] tracking-wider uppercase text-[11px]">Quantum</span>
+            <span className="font-extrabold text-[#94B1C8] tracking-wider uppercase text-[11px]">Quantum</span>
           </div>
         </div>
 

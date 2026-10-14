@@ -88,7 +88,7 @@ export function MobbinFooter() {
                   lineHeight: 0.8,
                   opacity,
                   transform: `translateY(${translateY}%)`,
-                  color: "#E8D5CE", // Reddish cream shade on top of #4C050C background
+                  color: "#94B1C8", // Pantone 13-4306 TCX Ice Melt Blue on #4C050C background
                 }}
               >
                 {letter}
