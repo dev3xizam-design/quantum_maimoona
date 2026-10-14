@@ -14,14 +14,14 @@ export function MobbinFooter() {
       const rect = footerRef.current.getBoundingClientRect();
       const windowHeight = window.innerHeight;
 
-      // Start calculating as footer enters the viewport
-      const startPoint = windowHeight * 0.95;
-      const endPoint = windowHeight - rect.height + 40;
-      const totalDistance = startPoint - endPoint;
+      // Start calculating earlier and spread across a wider distance for a much slower, gradual reveal
+      const startPoint = windowHeight * 1.25;
+      const endPoint = windowHeight - rect.height - 80;
+      const totalDistance = Math.max(startPoint - endPoint, 350);
 
       if (rect.top <= startPoint) {
         const scrolled = startPoint - rect.top;
-        const progress = Math.min(Math.max(scrolled / (totalDistance || 1), 0), 1);
+        const progress = Math.min(Math.max(scrolled / totalDistance, 0), 1);
         setRevealProgress(progress);
       } else {
         setRevealProgress(0);
@@ -63,32 +63,33 @@ export function MobbinFooter() {
 
       {/* Mobbin-style Giant Watermark:
           Positioned at the very bottom edge, submerged so only the top half is showing (like Mobbin).
-          Letters (Q - U - A - N - T - U - M) emerge sequentially letter-by-letter on scroll
-          in a reddish cream shade (#E8D5CE) on top of the #4C050C Merlot background */}
+          Letters (Q - U - A - N - T - U - M) emerge sequentially letter-by-letter with a slow, luxurious glide */}
       <div className="pointer-events-none select-none relative flex justify-center items-end overflow-hidden w-full">
         <div className="flex justify-center items-end tracking-tighter uppercase font-sans font-black">
           {LETTERS.map((letter, i) => {
-            // Stagger reveal for each letter across the scroll range
-            const letterWindow = 0.22;
-            const stepStart = 0.05 + i * 0.11;
+            // Slower, wider window for each letter
+            const letterWindow = 0.35;
+            const stepStart = i * 0.09;
             
             const rawProgress = Math.min(Math.max((revealProgress - stepStart) / letterWindow, 0), 1);
             const eased = Math.sin((rawProgress * Math.PI) / 2);
 
-            // Slides up from 100% (hidden below bottom edge) to 35% (half showing at bottom edge, exactly like Mobbin)
+            // Slides up from 100% to 35% (half submerged at bottom edge)
             const translateY = 100 - (eased * 65);
             const opacity = Math.max(eased * 0.9, 0.02);
 
             return (
               <span
                 key={i}
-                className="inline-block transition-transform duration-150 ease-out font-black"
+                className="inline-block font-black will-change-transform"
                 style={{
                   fontSize: "clamp(80px, 18vw, 250px)",
                   lineHeight: 0.8,
                   opacity,
                   transform: `translateY(${translateY}%)`,
                   color: "#94B1C8", // Pantone 13-4306 TCX Ice Melt Blue on #4C050C background
+                  transition: "transform 0.75s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.75s ease-out",
+                  transitionDelay: `${i * 40}ms`,
                 }}
               >
                 {letter}
