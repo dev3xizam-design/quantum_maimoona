@@ -17,41 +17,56 @@ import {
 } from "@/components/icons";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Dashboard — Quantum Tax Engine" };
+export const metadata = { title: "Executive Dashboard — Quantum Tax Engine" };
 
+// Pinterest & Mobbin-inspired Categorized Hub Tiles
 function QuickNavTile({
   href,
   title,
   sub,
   icon,
   badge,
+  category,
 }: {
   href: string;
   title: string;
   sub: string;
   icon: React.ReactNode;
   badge?: string;
+  category?: "core" | "data" | "system";
 }) {
+  const iconBg =
+    category === "core"
+      ? "bg-[#4C050C]/10 text-[#4C050C] group-hover:bg-[#4C050C] group-hover:text-white"
+      : category === "data"
+      ? "bg-[#94B1C8]/25 text-[#1D364A] group-hover:bg-[#3B6483] group-hover:text-white"
+      : "bg-[rgba(26,9,5,0.06)] text-[#1A0905] group-hover:bg-[#1A0905] group-hover:text-white";
+
   return (
     <Link
       href={href}
-      className="group relative flex flex-col justify-between p-4 rounded-2xl bg-[#EAE5D8] border border-[rgba(26,9,5,0.1)] shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-md hover:border-[#4C050C]/30 hover:bg-[#F5F2EB]"
+      className="group relative flex flex-col justify-between p-4 rounded-2xl bg-[#EAE5D8] border border-[rgba(26,9,5,0.08)] shadow-xs transition-all duration-200 hover:-translate-y-1 hover:shadow-md hover:border-[#4C050C]/35 hover:bg-[#F5F2EB]"
+      style={{
+        boxShadow: "0 2px 8px -2px rgba(26, 9, 5, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.6)",
+      }}
     >
       <div className="flex items-center justify-between mb-3">
-        <span className="w-9 h-9 rounded-xl flex items-center justify-center bg-[rgba(26,9,5,0.06)] text-[#1A0905] transition-all duration-200 group-hover:bg-[#4C050C] group-hover:text-white group-hover:scale-105">
+        <span
+          className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-200 group-hover:scale-105 ${iconBg}`}
+        >
           {icon}
         </span>
         {badge && (
-          <span className="px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-[#4C050C] text-white shadow-sm">
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-[#4C050C] text-white shadow-xs">
             {badge}
           </span>
         )}
       </div>
       <div>
-        <div className="text-[13.5px] font-bold text-[#1A0905] group-hover:text-[#4C050C] transition-colors">
+        <div className="text-[13px] font-bold text-[#1A0905] group-hover:text-[#4C050C] transition-colors">
           {title}
         </div>
-        <div className="text-[11.5px] text-[#4E5D6C] mt-0.5 line-clamp-1">{sub}</div>
+        <div className="text-[11px] text-[#4E5D6C] mt-0.5 line-clamp-1">{sub}</div>
       </div>
     </Link>
   );
@@ -76,7 +91,7 @@ function MetricCard({
     variant === "ice"
       ? "bg-[#A4C0D4] border-[rgba(20,37,51,0.15)] text-[#142533]"
       : variant === "alert"
-      ? "bg-[#F7F2EB] border-[#4C050C]/30 text-[#1A0905]"
+      ? "bg-[#FAF5ED] border-[#4C050C]/30 text-[#1A0905]"
       : "bg-[#EAE5D8] border-[rgba(26,9,5,0.1)] text-[#1A0905]";
 
   const subStyles =
@@ -90,13 +105,16 @@ function MetricCard({
     <Link
       href={href}
       className={`group relative flex flex-col justify-between p-5 rounded-2xl border shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-lg ${bgStyles}`}
+      style={{
+        boxShadow: "0 4px 16px -2px rgba(26, 9, 5, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.6)",
+      }}
     >
       <div className="flex items-center justify-between">
         <span className="text-[11px] font-extrabold tracking-wider uppercase opacity-75">
           {title}
         </span>
         {tag && (
-          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-white/70 backdrop-blur-sm shadow-xs">
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-white/70 backdrop-blur-sm shadow-2xs">
             {tag}
           </span>
         )}
@@ -125,10 +143,10 @@ function DeadlineRow({
   return (
     <Link
       href={`/months/${d.period.length === 7 ? d.period : d.period.slice(0, 4) + "-01"}/${d.state}`}
-      className="group flex items-center gap-3.5 px-4 py-3 border-b border-[rgba(26,9,5,0.08)] last:border-0 hover:bg-black/[0.03] transition-colors"
+      className="group flex items-center gap-3.5 px-4 py-3 border-b border-[rgba(26,9,5,0.06)] last:border-0 hover:bg-black/[0.03] transition-colors"
     >
       <span
-        className={`w-7 h-7 rounded-full flex items-center justify-center text-[10.5px] font-extrabold tracking-wide shadow-xs ${
+        className={`w-7 h-7 rounded-full flex items-center justify-center text-[10.5px] font-extrabold tracking-wide shadow-2xs ${
           late ? "bg-[#4C050C] text-white" : "bg-[#3B6483] text-white"
         }`}
       >
@@ -172,21 +190,25 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      {/* Top Executive Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2">
+      {/* Top Executive Header with System Status & Period Selector */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-1">
         <div>
-          <div className="flex items-center gap-2 mb-1">
+          <div className="flex items-center gap-2 mb-1.5">
             <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse" />
-            <span className="text-[11.5px] font-bold tracking-wide uppercase text-[#4E5D6C]">
-              14 State Tax Engines Operational
+            <span className="text-[11px] font-extrabold tracking-wider uppercase text-[#4E5D6C]">
+              Multi-State Tax Automation Engine · Active
+            </span>
+            <span className="text-[#4E5D6C]/40">|</span>
+            <span className="text-[11px] font-semibold text-[#1D364A] bg-[#94B1C8]/30 px-2 py-0.5 rounded-full">
+              14 Jurisdictions Synced
             </span>
           </div>
-          <h1 className="text-[30px] font-extrabold tracking-tight text-[#1A0905]">
-            Tax Automation Dashboard
+          <h1 className="text-[30px] font-black tracking-tight text-[#1A0905]">
+            Executive Dashboard
           </h1>
           <p className="text-[13.5px] text-[#4E5D6C] max-w-2xl mt-0.5">
             {d.latest
-              ? `Active computation period: ${periodLabel(d.latest.month)} across ${d.latest.states} state jurisdictions.`
+              ? `Current filing period: ${periodLabel(d.latest.month)} across ${d.latest.states} state jurisdictions.`
               : "Upload your sales export to initialize the multi-state excise calculation engine."}
           </p>
         </div>
@@ -251,7 +273,12 @@ export default async function DashboardPage() {
       {/* Primary Split View: Deadlines & Recent Months */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {/* Upcoming State Deadlines */}
-        <div className="flex flex-col rounded-2xl bg-[#EAE5D8] border border-[rgba(26,9,5,0.1)] shadow-sm overflow-hidden">
+        <div
+          className="flex flex-col rounded-2xl bg-[#EAE5D8] border border-[rgba(26,9,5,0.09)] shadow-sm overflow-hidden"
+          style={{
+            boxShadow: "0 4px 16px -2px rgba(26, 9, 5, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.6)",
+          }}
+        >
           <div className="flex items-center justify-between px-5 py-3.5 border-b border-[rgba(26,9,5,0.08)] bg-black/[0.02]">
             <div className="flex items-center gap-2">
               <span className="font-extrabold text-[14px] text-[#1A0905]">
@@ -283,7 +310,12 @@ export default async function DashboardPage() {
         </div>
 
         {/* Recent Monthly Calculations */}
-        <div className="flex flex-col rounded-2xl bg-[#EAE5D8] border border-[rgba(26,9,5,0.1)] shadow-sm overflow-hidden">
+        <div
+          className="flex flex-col rounded-2xl bg-[#EAE5D8] border border-[rgba(26,9,5,0.09)] shadow-sm overflow-hidden"
+          style={{
+            boxShadow: "0 4px 16px -2px rgba(26, 9, 5, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.6)",
+          }}
+        >
           <div className="flex items-center justify-between px-5 py-3.5 border-b border-[rgba(26,9,5,0.08)] bg-black/[0.02]">
             <div className="flex items-center gap-2">
               <span className="font-extrabold text-[14px] text-[#1A0905]">Recent Filing Months</span>
@@ -339,13 +371,18 @@ export default async function DashboardPage() {
       {/* Compliance Stream: Data Gaps, PACT Stream & Upload History */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
         {/* 1. Missing Data Gaps */}
-        <div className="p-5 rounded-2xl bg-[#EAE5D8] border border-[rgba(26,9,5,0.1)] shadow-sm flex flex-col justify-between">
+        <div
+          className="p-5 rounded-2xl bg-[#EAE5D8] border border-[rgba(26,9,5,0.09)] shadow-sm flex flex-col justify-between"
+          style={{
+            boxShadow: "0 4px 16px -2px rgba(26, 9, 5, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.6)",
+          }}
+        >
           <div>
             <div className="flex items-center justify-between mb-3">
               <span className="text-[13.5px] font-extrabold text-[#1A0905]">Data Gaps</span>
               <span className="text-[11px] font-bold text-[#4E5D6C]">Catalog Health</span>
             </div>
-            <div className="space-y-2.5 text-[12.5px]">
+            <div className="space-y-2 text-[12.5px]">
               {[
                 { n: d.gaps.noCost, label: "SKUs missing wholesale cost", href: "/products?tab=cost" },
                 { n: d.gaps.noMl, label: "SKUs missing mL volume", href: "/products?tab=ml" },
@@ -376,7 +413,12 @@ export default async function DashboardPage() {
         </div>
 
         {/* 2. PACT Compliance Feed */}
-        <div className="p-5 rounded-2xl bg-[#EAE5D8] border border-[rgba(26,9,5,0.1)] shadow-sm flex flex-col justify-between">
+        <div
+          className="p-5 rounded-2xl bg-[#EAE5D8] border border-[rgba(26,9,5,0.09)] shadow-sm flex flex-col justify-between"
+          style={{
+            boxShadow: "0 4px 16px -2px rgba(26, 9, 5, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.6)",
+          }}
+        >
           <div>
             <div className="flex items-center justify-between mb-3">
               <span className="text-[13.5px] font-extrabold text-[#1A0905]">PACT Compliance Feed</span>
@@ -397,15 +439,21 @@ export default async function DashboardPage() {
           <div className="mt-4 pt-3 border-t border-[rgba(26,9,5,0.08)]">
             <Link
               href="/config/stores"
-              className="inline-flex items-center justify-center w-full py-2 rounded-xl text-[12px] font-bold bg-[#A4C0D4] text-[#142533] hover:bg-[#92b0c6] transition-colors"
+              className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-[12px] font-bold bg-[#A4C0D4] text-[#142533] hover:bg-[#92b0c6] shadow-2xs transition-colors"
             >
-              Configure Store Connections →
+              <span>Configure Store Feeds</span>
+              <span>→</span>
             </Link>
           </div>
         </div>
 
         {/* 3. Recent File Imports */}
-        <div className="p-5 rounded-2xl bg-[#EAE5D8] border border-[rgba(26,9,5,0.1)] shadow-sm flex flex-col justify-between">
+        <div
+          className="p-5 rounded-2xl bg-[#EAE5D8] border border-[rgba(26,9,5,0.09)] shadow-sm flex flex-col justify-between"
+          style={{
+            boxShadow: "0 4px 16px -2px rgba(26, 9, 5, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.6)",
+          }}
+        >
           <div>
             <div className="flex items-center justify-between mb-3">
               <span className="text-[13.5px] font-extrabold text-[#1A0905]">Recent Data Imports</span>
@@ -432,19 +480,27 @@ export default async function DashboardPage() {
           <div className="mt-4 pt-3 border-t border-[rgba(26,9,5,0.08)]">
             <Link
               href="/upload"
-              className="inline-flex items-center justify-center w-full py-2 rounded-xl text-[12px] font-bold bg-[#E3DFCE] text-[#1A0905] border border-[rgba(26,9,5,0.12)] hover:bg-[#d8d3c0] transition-colors"
+              className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-[12px] font-bold bg-[#E3DFCE] text-[#1A0905] border border-[rgba(26,9,5,0.12)] hover:bg-[#d8d3c0] shadow-2xs transition-colors"
             >
-              Upload New CSV Report →
+              <span>Upload CSV Report</span>
+              <span>→</span>
             </Link>
           </div>
         </div>
       </div>
 
-      {/* Quick Access Navigation Rail ("Jump To") */}
+      {/* Categorized Quick Access Hub */}
       <section className="pt-2">
-        <h2 className="text-[12px] font-extrabold uppercase tracking-wider text-[#4E5D6C] mb-3">
-          Quick Access Hub
-        </h2>
+        <div className="flex items-center justify-between mb-3.5">
+          <div>
+            <h2 className="text-[13px] font-black uppercase tracking-wider text-[#1A0905]">
+              Quick Access Command Hub
+            </h2>
+            <p className="text-[11.5px] text-[#4E5D6C]">Direct links into core calculations, data streams, and compliance tools.</p>
+          </div>
+          <span className="text-[11px] font-bold text-[#4C050C]">10 Modules</span>
+        </div>
+
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
           <QuickNavTile
             href="/months"
@@ -452,19 +508,14 @@ export default async function DashboardPage() {
             sub="State-by-state calculations"
             icon={<IconMonths />}
             badge={d.monthsWithData > d.monthsComputed ? `${d.monthsWithData - d.monthsComputed} pending` : undefined}
+            category="core"
           />
           <QuickNavTile
-            href="/upload"
-            title="Upload Data"
-            sub="Avalara, Shopify & CSVs"
-            icon={<IconUpload />}
-          />
-          <QuickNavTile
-            href="/products"
-            title="Products & SKUs"
-            sub={`${d.gaps.soldSkus.toLocaleString()} products active`}
-            icon={<IconProducts />}
-            badge={d.gaps.noCost > 0 ? `${d.gaps.noCost} uncosted` : undefined}
+            href="/calendar"
+            title="Filing Calendar"
+            sub="Deadlines & schedules"
+            icon={<IconCalendar />}
+            category="core"
           />
           <QuickNavTile
             href="/returns"
@@ -472,42 +523,57 @@ export default async function DashboardPage() {
             sub="Computed tax liabilities"
             icon={<IconReturns />}
             badge={d.overdueCount > 0 ? `${d.overdueCount} overdue` : undefined}
+            category="core"
           />
           <QuickNavTile
-            href="/calendar"
-            title="Filing Calendar"
-            sub="Deadlines & schedules"
-            icon={<IconCalendar />}
+            href="/upload"
+            title="Upload Data"
+            sub="Avalara, Shopify & CSVs"
+            icon={<IconUpload />}
+            category="data"
           />
           <QuickNavTile
-            href="/portals"
-            title="State Portals"
-            sub={`${d.portals.withLink} official state logins`}
-            icon={<IconPortals />}
-          />
-          <QuickNavTile
-            href="/config/stores"
-            title="Store Feeds"
-            sub={`${d.stores.connected} of ${d.stores.total} connected`}
-            icon={<IconStores />}
-          />
-          <QuickNavTile
-            href="/config"
-            title="Rates & Rules"
-            sub="Excise basis & effective dates"
-            icon={<IconConfig />}
+            href="/products"
+            title="Products & SKUs"
+            sub={`${d.gaps.soldSkus.toLocaleString()} products active`}
+            icon={<IconProducts />}
+            badge={d.gaps.noCost > 0 ? `${d.gaps.noCost} uncosted` : undefined}
+            category="data"
           />
           <QuickNavTile
             href="/orders"
             title="Orders Feed"
             sub="Transaction line items"
             icon={<IconOrders />}
+            category="data"
+          />
+          <QuickNavTile
+            href="/config/stores"
+            title="Store Feeds"
+            sub={`${d.stores.connected} of ${d.stores.total} connected`}
+            icon={<IconStores />}
+            category="data"
+          />
+          <QuickNavTile
+            href="/portals"
+            title="State Portals"
+            sub={`${d.portals.withLink} official state logins`}
+            icon={<IconPortals />}
+            category="system"
+          />
+          <QuickNavTile
+            href="/config"
+            title="Rates & Rules"
+            sub="Excise basis & effective dates"
+            icon={<IconConfig />}
+            category="system"
           />
           <QuickNavTile
             href="/guide"
             title="Knowledge Guide"
             sub="System rules & state nexus"
             icon={<IconGuide />}
+            category="system"
           />
         </div>
       </section>

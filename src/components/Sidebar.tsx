@@ -113,15 +113,18 @@ export function Sidebar({
 
       {/* Desktop Antigravity / Mobbin Style Minimalist Icon Dock */}
       <aside className="sidebar-dock group/dock">
-        {/* Top: Pure Background-less Q Logo */}
-        <div className="dock-brand pt-2">
+        {/* Top: Pure Background-less Q Logo with Styled Dock Tooltip */}
+        <div className="dock-brand pt-2 relative group/item flex items-center justify-center w-full">
           <Link
             href="/"
             className="group/logo relative flex items-center justify-center p-1 transition-transform duration-200 hover:scale-110 active:scale-95"
-            title="Quantum Home"
+            aria-label="Quantum Home"
           >
             <Logo size={36} />
           </Link>
+          <div className="dock-tooltip">
+            <span className="font-semibold text-[#E3DFCE]">Quantum</span>
+          </div>
         </div>
 
         {/* Middle: Navigation Icons with Floating Tooltips */}
