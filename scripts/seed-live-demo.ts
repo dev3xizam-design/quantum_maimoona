@@ -301,6 +301,48 @@ async function main() {
   await db.insert(shipments).values(sampleShipments);
   console.log(`✓ Inserted ${sampleShipments.length} sample PACT shipments`);
 
+  // 8. Transactions for 2026-10, 2026-09, 2026-08 across all 13 states
+  await db.delete(transactions);
+  const periods = ["2026-10", "2026-09", "2026-08"];
+  const txRows = [];
+  let docCount = 1000;
+  for (const period of periods) {
+    for (const s of octStates) {
+      docCount++;
+      txRows.push({
+        sourceFile: "avalara_sales_export.csv",
+        documentId: `DOC-${docCount}`,
+        lineNo: "1",
+        ref1: `ORDER-${docCount}`,
+        documentStatus: "Committed",
+        docType: "Sales Invoice",
+        sign: 1,
+        documentDate: `${period}-10`,
+        period,
+        reportingDate: `${period}-10`,
+        taxCalcDate: `${period}-10`,
+        state: s.state,
+        destCounty: "Central",
+        destCity: "Metro",
+        destZip: "00000",
+        jurisdictionType: "State",
+        jurisdictionDescription: stateName(s.state),
+        taxTypeDescription: "Sales and Use Tax",
+        rate: "0.0600",
+        lineAmount: "450.0000",
+        discountAmount: "0.0000",
+        taxableAmount: "320.0000",
+        exemptAmount: "130.0000",
+        taxAmount: s.tax,
+        quantity: "2.0000",
+        itemCode: "SUORIN-AIR-PRO",
+        itemDescription: "Suorin Air Pro Pod Kit",
+      });
+    }
+  }
+  await db.insert(transactions).values(txRows);
+  console.log(`✓ Inserted ${txRows.length} transactions across ${periods.join(", ")}`);
+
   console.log("\n All live demo data successfully seeded into local database!");
   await sql.end();
 }
