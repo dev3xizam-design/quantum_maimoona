@@ -18,7 +18,7 @@ import {
 } from "@/components/icons";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Executive Dashboard — Quantum Tax Engine" };
+export const metadata = { title: "Dashboard · Quantum" };
 
 // Pinterest & Mobbin-inspired Categorized Hub Tiles
 function QuickNavTile({
@@ -46,14 +46,14 @@ function QuickNavTile({
   return (
     <Link
       href={href}
-      className="group relative flex flex-col justify-between p-4 rounded-2xl bg-[#EAE5D8] border border-[rgba(26,9,5,0.08)] shadow-xs transition-all duration-200 hover:-translate-y-1 hover:shadow-md hover:border-[#4C050C]/35 hover:bg-[#F5F2EB]"
+      className="group relative flex flex-col justify-between p-4 rounded-2xl bg-[#EAE5D8] border border-[rgba(26,9,5,0.08)] shadow-xs transition-all duration-300 ease-out hover:-translate-y-1.5 hover:shadow-lg hover:border-[#4C050C]/40 hover:bg-[#F5F2EB]"
       style={{
         boxShadow: "0 2px 8px -2px rgba(26, 9, 5, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.6)",
       }}
     >
       <div className="flex items-center justify-between mb-3">
         <span
-          className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-200 group-hover:scale-105 ${iconBg}`}
+          className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-300 group-hover:scale-110 ${iconBg}`}
         >
           {icon}
         </span>
@@ -64,8 +64,9 @@ function QuickNavTile({
         )}
       </div>
       <div>
-        <div className="text-[13px] font-bold text-[#1A0905] group-hover:text-[#4C050C] transition-colors">
-          {title}
+        <div className="text-[13px] font-bold text-[#1A0905] group-hover:text-[#4C050C] transition-colors flex items-center justify-between">
+          <span>{title}</span>
+          <span className="text-[11px] opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-200 text-[#4C050C]">→</span>
         </div>
         <div className="text-[11px] text-[#4E5D6C] mt-0.5 line-clamp-1">{sub}</div>
       </div>
@@ -90,10 +91,10 @@ function MetricCard({
 }) {
   const bgStyles =
     variant === "ice"
-      ? "bg-[#A4C0D4] border-[rgba(20,37,51,0.15)] text-[#142533]"
+      ? "bg-[#A4C0D4] hover:bg-[#B1CEE0] border-[rgba(20,37,51,0.15)] hover:border-[#142533]/30 text-[#142533]"
       : variant === "alert"
-      ? "bg-[#FAF5ED] border-[#4C050C]/30 text-[#1A0905]"
-      : "bg-[#EAE5D8] border-[rgba(26,9,5,0.1)] text-[#1A0905]";
+      ? "bg-[#FAF5ED] hover:bg-[#FFF9F0] border-[#4C050C]/25 hover:border-[#4C050C]/50 text-[#1A0905]"
+      : "bg-[#EAE5D8] hover:bg-[#F5F1E8] border-[rgba(26,9,5,0.1)] hover:border-[#4C050C]/35 text-[#1A0905]";
 
   const subStyles =
     variant === "ice"
@@ -105,9 +106,9 @@ function MetricCard({
   return (
     <Link
       href={href}
-      className={`group relative flex flex-col justify-between p-5 rounded-2xl border shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-lg ${bgStyles}`}
+      className={`group relative flex flex-col justify-between p-5 rounded-2xl border shadow-sm transition-all duration-300 ease-out hover:-translate-y-1.5 hover:shadow-xl ${bgStyles}`}
       style={{
-        boxShadow: "0 4px 16px -2px rgba(26, 9, 5, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.6)",
+        boxShadow: "0 4px 16px -2px rgba(26, 9, 5, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.6)",
       }}
     >
       <div className="flex items-center justify-between">
@@ -115,7 +116,7 @@ function MetricCard({
           {title}
         </span>
         {tag && (
-          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-white/70 backdrop-blur-sm shadow-2xs">
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-white/70 backdrop-blur-sm shadow-2xs group-hover:bg-white transition-colors">
             {tag}
           </span>
         )}
@@ -127,7 +128,7 @@ function MetricCard({
       </div>
       <div className={`text-[12px] font-medium flex items-center justify-between ${subStyles}`}>
         <span>{sub}</span>
-        <span className="text-[14px] transition-transform duration-200 group-hover:translate-x-1">
+        <span className="text-[14px] transition-transform duration-300 ease-out group-hover:translate-x-1.5">
           →
         </span>
       </div>
@@ -144,10 +145,10 @@ function DeadlineRow({
   return (
     <Link
       href={`/months/${d.period.length === 7 ? d.period : d.period.slice(0, 4) + "-01"}/${d.state}`}
-      className="group flex items-center gap-3.5 px-4 py-3 border-b border-[rgba(26,9,5,0.06)] last:border-0 hover:bg-black/[0.03] transition-colors"
+      className="group flex items-center gap-3.5 px-4 py-3 border-b border-[rgba(26,9,5,0.06)] last:border-0 hover:bg-[#4C050C]/[0.06] hover:pl-5 transition-all duration-200"
     >
       <span
-        className={`w-7 h-7 rounded-full flex items-center justify-center text-[10.5px] font-extrabold tracking-wide shadow-2xs ${
+        className={`w-7 h-7 rounded-full flex items-center justify-center text-[10.5px] font-extrabold tracking-wide shadow-2xs transition-transform duration-200 group-hover:scale-105 ${
           late ? "bg-[#4C050C] text-white" : "bg-[#3B6483] text-white"
         }`}
       >
@@ -191,25 +192,16 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      {/* Top Executive Header with System Status & Period Selector */}
+      {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-1">
         <div>
-          <div className="flex items-center gap-2 mb-1.5">
-            <span className="text-[11px] font-extrabold tracking-wider uppercase text-[#4E5D6C]">
-              Multi-State Tax Automation Engine · Active
-            </span>
-            <span className="text-[#4E5D6C]/40">|</span>
-            <span className="text-[11px] font-semibold text-[#1D364A] bg-[#94B1C8]/30 px-2 py-0.5 rounded-full">
-              14 Jurisdictions Synced
-            </span>
-          </div>
-          <h1 className="text-[30px] font-black tracking-tight text-[#1A0905]">
-            Executive Dashboard
+          <h1 className="text-[32px] font-black tracking-tight text-[#1A0905]">
+            Dashboard
           </h1>
           <p className="text-[13.5px] text-[#4E5D6C] max-w-2xl mt-0.5">
             {d.latest
-              ? `Current filing period: ${periodLabel(d.latest.month)} across ${d.latest.states} state jurisdictions.`
-              : "Upload your sales export to initialize the multi-state excise calculation engine."}
+              ? `${periodLabel(d.latest.month)} is your most recent month. Everything below links straight to where the work is.`
+              : "Upload your sales export to initialize calculations."}
           </p>
         </div>
 
@@ -223,10 +215,14 @@ export default async function DashboardPage() {
             </a>
             <Link
               href={`/months/${latestMonth}`}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-[12.5px] font-bold bg-[#4C050C] text-white shadow-sm hover:bg-[#680A12] hover:shadow-md transition-all active:scale-95"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-[12.5px] font-extrabold shadow-sm hover:shadow-md transition-all active:scale-95"
+              style={{
+                backgroundColor: "#4C050C",
+                color: "#FFFFFF",
+              }}
             >
-              <span>Open {periodLabel(latestMonth)}</span>
-              <span>→</span>
+              <span style={{ color: "#FFFFFF" }}>Open {periodLabel(latestMonth)}</span>
+              <span style={{ color: "#FFFFFF" }}>→</span>
             </Link>
           </div>
         )}
@@ -274,7 +270,7 @@ export default async function DashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {/* Upcoming State Deadlines */}
         <div
-          className="flex flex-col rounded-2xl bg-[#EAE5D8] border border-[rgba(26,9,5,0.09)] shadow-sm overflow-hidden"
+          className="flex flex-col rounded-2xl bg-[#EAE5D8] border border-[rgba(26,9,5,0.09)] shadow-sm overflow-hidden transition-all duration-300 hover:shadow-md hover:border-[#4C050C]/25"
           style={{
             boxShadow: "0 4px 16px -2px rgba(26, 9, 5, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.6)",
           }}
@@ -296,7 +292,7 @@ export default async function DashboardPage() {
             </Link>
           </div>
 
-          <div className="divide-y divide-[rgba(26,9,5,0.06)] flex-1 overflow-y-auto max-h-[380px]">
+          <div className="divide-y divide-[rgba(26,9,5,0.06)] flex-1 overflow-y-auto max-h-[380px] pt-1">
             {(d.overdue.length ? d.overdue : d.upcoming).map((x, i) => (
               <DeadlineRow key={`${x.state}${x.taxType}${x.period}${i}`} d={x} />
             ))}
@@ -311,7 +307,7 @@ export default async function DashboardPage() {
 
         {/* Recent Monthly Calculations */}
         <div
-          className="flex flex-col rounded-2xl bg-[#EAE5D8] border border-[rgba(26,9,5,0.09)] shadow-sm overflow-hidden"
+          className="flex flex-col rounded-2xl bg-[#EAE5D8] border border-[rgba(26,9,5,0.09)] shadow-sm overflow-hidden transition-all duration-300 hover:shadow-md hover:border-[#4C050C]/25"
           style={{
             boxShadow: "0 4px 16px -2px rgba(26, 9, 5, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.6)",
           }}
@@ -328,12 +324,12 @@ export default async function DashboardPage() {
             </Link>
           </div>
 
-          <div className="divide-y divide-[rgba(26,9,5,0.06)] flex-1 overflow-y-auto max-h-[380px]">
+          <div className="divide-y divide-[rgba(26,9,5,0.06)] flex-1 overflow-y-auto max-h-[380px] pt-1">
             {d.months.map((m) => (
               <Link
                 key={m.month}
                 href={`/months/${m.month}`}
-                className="group flex items-center justify-between px-5 py-3.5 hover:bg-black/[0.03] transition-colors"
+                className="group flex items-center justify-between px-5 py-3.5 hover:bg-[#4C050C]/[0.06] hover:pl-6 transition-all duration-200"
               >
                 <div>
                   <div className="text-[13.5px] font-bold text-[#1A0905] group-hover:text-[#4C050C] transition-colors">
@@ -352,7 +348,7 @@ export default async function DashboardPage() {
                   <span className="text-[13.5px] font-extrabold tnum text-[#1A0905]">
                     {fmtMoney(m.totalTax)}
                   </span>
-                  <span className="text-[13px] text-[#4E5D6C] group-hover:translate-x-0.5 transition-transform">
+                  <span className="text-[13px] text-[#4E5D6C] group-hover:translate-x-1 transition-transform">
                     →
                   </span>
                 </div>
@@ -372,7 +368,7 @@ export default async function DashboardPage() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
         {/* 1. Missing Data Gaps */}
         <div
-          className="p-5 rounded-2xl bg-[#EAE5D8] border border-[rgba(26,9,5,0.09)] shadow-sm flex flex-col justify-between"
+          className="p-5 rounded-2xl bg-[#EAE5D8] border border-[rgba(26,9,5,0.09)] shadow-sm flex flex-col justify-between transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-lg hover:border-[#4C050C]/25 hover:bg-[#F5F2EB]"
           style={{
             boxShadow: "0 4px 16px -2px rgba(26, 9, 5, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.6)",
           }}
@@ -391,7 +387,7 @@ export default async function DashboardPage() {
                 <Link
                   key={row.label}
                   href={row.href}
-                  className="flex items-center justify-between p-2 rounded-xl hover:bg-black/[0.04] transition-colors"
+                  className="flex items-center justify-between p-2 rounded-xl hover:bg-[#4C050C]/[0.06] hover:pl-3 transition-all duration-200"
                 >
                   <span className="text-[#4E5D6C]">{row.label}</span>
                   <span
@@ -414,7 +410,7 @@ export default async function DashboardPage() {
 
         {/* 2. PACT Compliance Feed */}
         <div
-          className="p-5 rounded-2xl bg-[#EAE5D8] border border-[rgba(26,9,5,0.09)] shadow-sm flex flex-col justify-between"
+          className="p-5 rounded-2xl bg-[#EAE5D8] border border-[rgba(26,9,5,0.09)] shadow-sm flex flex-col justify-between transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-lg hover:border-[#4C050C]/25 hover:bg-[#F5F2EB]"
           style={{
             boxShadow: "0 4px 16px -2px rgba(26, 9, 5, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.6)",
           }}
@@ -449,7 +445,7 @@ export default async function DashboardPage() {
 
         {/* 3. Recent File Imports */}
         <div
-          className="p-5 rounded-2xl bg-[#EAE5D8] border border-[rgba(26,9,5,0.09)] shadow-sm flex flex-col justify-between"
+          className="p-5 rounded-2xl bg-[#EAE5D8] border border-[rgba(26,9,5,0.09)] shadow-sm flex flex-col justify-between transition-all duration-300 ease-out hover:-translate-y-1 hover:shadow-lg hover:border-[#4C050C]/25 hover:bg-[#F5F2EB]"
           style={{
             boxShadow: "0 4px 16px -2px rgba(26, 9, 5, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.6)",
           }}

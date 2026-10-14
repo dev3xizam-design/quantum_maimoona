@@ -41,7 +41,7 @@ export function MobbinFooter() {
   return (
     <footer
       ref={footerRef}
-      className="mobbin-footer relative overflow-hidden bg-[#4C050C] text-[#E3DFCE] pt-14 pb-0 px-6 sm:px-12 border-t border-[rgba(227,223,206,0.14)] mt-16 transition-colors duration-500"
+      className="mobbin-footer relative overflow-hidden bg-[#4C050C] text-[#E3DFCE] pt-14 pb-0 px-4 sm:px-8 border-t border-[rgba(227,223,206,0.14)] mt-16 transition-colors duration-500"
     >
       <div className="mx-auto max-w-[1760px] relative z-10 flex flex-wrap items-center justify-between gap-6 text-[12.5px] pb-10">
         <div className="flex items-center gap-6">
@@ -51,7 +51,7 @@ export function MobbinFooter() {
           </span>
         </div>
 
-        <div className="flex flex-wrap items-center gap-6 text-[12px] font-medium text-[#E3DFCE]/80">
+        <div className="flex flex-wrap items-center gap-4 sm:gap-6 text-[12px] font-medium text-[#E3DFCE]/80">
           <a href="/guide" className="hover:text-white transition-colors">Documentation</a>
           <a href="/portals" className="hover:text-white transition-colors">Portals</a>
           <a href="/config" className="hover:text-white transition-colors">Excise Rates</a>
@@ -63,9 +63,9 @@ export function MobbinFooter() {
 
       {/* Mobbin-style Giant Watermark:
           Positioned at the very bottom edge, submerged so only the top half is showing (like Mobbin).
-          Letters (Q - U - A - N - T - U - M) emerge sequentially letter-by-letter with a slow, luxurious glide */}
-      <div className="pointer-events-none select-none relative flex justify-center items-end overflow-hidden w-full">
-        <div className="flex justify-center items-end tracking-tighter uppercase font-sans font-black">
+          Scaled fluidly with clamp(28px, 12.5vw, 210px) so Q and M never clip on half-screen laptop or mobile */}
+      <div className="pointer-events-none select-none relative flex justify-center items-end overflow-hidden w-full max-w-full px-2">
+        <div className="flex justify-center items-end tracking-[-0.03em] sm:tracking-[-0.04em] uppercase font-sans font-black max-w-full">
           {LETTERS.map((letter, i) => {
             // Slower, wider window for each letter
             const letterWindow = 0.35;
@@ -83,13 +83,13 @@ export function MobbinFooter() {
                 key={i}
                 className="inline-block font-black will-change-transform"
                 style={{
-                  fontSize: "clamp(80px, 18vw, 250px)",
-                  lineHeight: 0.8,
+                  fontSize: "clamp(28px, 12.5vw, 210px)",
+                  lineHeight: 0.82,
                   opacity,
                   transform: `translateY(${translateY}%)`,
                   color: "#94B1C8", // Pantone 13-4306 TCX Ice Melt Blue on #4C050C background
                   transition: "transform 0.75s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.75s ease-out",
-                  transitionDelay: `${i * 40}ms`,
+                  transitionDelay: `${i * 35}ms`,
                 }}
               >
                 {letter}
