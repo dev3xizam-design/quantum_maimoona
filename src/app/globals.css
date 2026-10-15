@@ -674,8 +674,8 @@ details > summary { list-style: none; }
 }
 
 .portalcard {
-  display: flex; flex-direction: column; justify-content: space-between;
-  min-height: 230px;
+  display: flex; flex-direction: column; justify-content: flex-start;
+  height: 100%; min-height: 240px;
   border: 1px solid var(--line); border-radius: 16px; background: #eae5d8;
   padding: 16px; box-shadow: var(--shadow-sm);
   transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease, border-color 0.2s ease;
@@ -683,6 +683,13 @@ details > summary { list-style: none; }
 .portalcard:hover { transform: translateY(-3px); box-shadow: var(--shadow-md); border-color: rgba(76, 5, 12, 0.3); }
 .portalcard[data-status="blocked"] { border-left: 4px solid var(--red-pop); }
 .portalcard[data-status="needs_license"] { border-left: 4px solid var(--warn); }
+
+.portalcard-edit {
+  position: absolute; right: 0; bottom: calc(100% + 8px); z-index: 50;
+  width: 320px; max-height: 480px; overflow-y: auto;
+  background: #ffffff; border: 1px solid var(--line); border-radius: 14px;
+  padding: 16px; box-shadow: var(--shadow-lg);
+}
 
 .copychip {
   display: inline-flex; align-items: center; gap: 7px; max-width: 100%;
